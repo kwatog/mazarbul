@@ -66,27 +66,47 @@ app.include_router(resources.router)
 app.include_router(allocations.router)
 app.include_router(alerts.router)
 
-# Initialize default admin if no users exist
+# Initialize admin user from environment variables if no users exist
 @app.on_event("startup")
 def create_default_admin():
+    # Only create admin if explicitly enabled via environment
+    if not os.getenv("CREATE_ADMIN_USER", "").lower() in ["true", "1", "yes"]:
+        return
+    
     db = SessionLocal()
     try:
         user_count = db.query(models.User).count()
         if user_count == 0:
             from datetime import datetime
             from .auth import get_password_hash
+            
+            # Get admin credentials from environment
+            admin_username = os.getenv("ADMIN_USERNAME", "admin")
+            admin_password = os.getenv("ADMIN_PASSWORD")
+            admin_email = os.getenv("ADMIN_EMAIL", "admin@mazarbul.com")
+            admin_full_name = os.getenv("ADMIN_FULL_NAME", "System Administrator")
+            
+            if not admin_password:
+                print("ERROR: ADMIN_PASSWORD environment variable required for admin creation")
+                return
+                
+            if len(admin_password) < 8:
+                print("ERROR: ADMIN_PASSWORD must be at least 8 characters long")
+                return
+            
             admin_user = models.User(
-                username="admin",
-                email="admin@mazarbul.com",
-                hashed_password=get_password_hash("Admin123!"), # Change this immediately
-                full_name="System Admin",
+                username=admin_username,
+                email=admin_email,
+                hashed_password=get_password_hash(admin_password),
+                full_name=admin_full_name,
                 role="Admin",
                 created_at=datetime.utcnow().isoformat()
             )
             db.add(admin_user)
             db.commit()
-            print("Default admin created: username=admin, password=Admin123!")
+            print(f"Admin user '{admin_username}' created successfully")
+            
     except Exception as e:
-        print(f"Error creating default admin: {e}")
+        print(f"Error creating admin user: {e}")
     finally:
         db.close()

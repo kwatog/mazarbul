@@ -43,7 +43,7 @@ def grant_access(
         if not model_cls:
              raise HTTPException(status_code=400, detail="Invalid record type")
              
-        record = db.query(model_cls).get(access.record_id)
+        record = db.get(model_cls, access.record_id)
         if record and hasattr(record, 'created_by') and record.created_by == current_user.id:
             can_grant = True
         else:
@@ -75,7 +75,7 @@ def revoke_access(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    access_record = db.query(models.RecordAccess).get(access_id)
+    access_record = db.get(models.RecordAccess, access_id)
     if not access_record:
         raise HTTPException(status_code=404, detail="Access record not found")
 
@@ -87,3 +87,33 @@ def revoke_access(
          return {"status": "deleted"}
     
     raise HTTPException(status_code=403, detail="Not authorized to revoke this access")
+
+@router.put("/{access_id}", response_model=schemas.RecordAccess)
+def update_access(
+    access_id: int,
+    access_update: schemas.RecordAccessUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Update existing record access permissions"""
+    access_record = db.get(models.RecordAccess, access_id)
+    if not access_record:
+        raise HTTPException(status_code=404, detail="Access record not found")
+
+    # Same authorization logic as revoke
+    if not (current_user.role in ["Admin", "Manager"] or access_record.granted_by == current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized to modify this access")
+
+    # Update allowed fields
+    if access_update.access_level is not None:
+        access_record.access_level = access_update.access_level
+    if access_update.expires_at is not None:
+        access_record.expires_at = access_update.expires_at
+
+    # Update modification tracking
+    access_record.updated_by = current_user.id
+    access_record.updated_at = datetime.utcnow().isoformat()
+
+    db.commit()
+    db.refresh(access_record)
+    return access_record

@@ -54,6 +54,8 @@ class RecordAccess(Base):
     granted_by = Column(Integer, ForeignKey("user.id"))
     granted_at = Column(String(32))
     expires_at = Column(String(32), nullable=True)
+    updated_by = Column(Integer, ForeignKey("user.id"), nullable=True)
+    updated_at = Column(String(32), nullable=True)
 
 
 class AuditLog(Base):

@@ -90,10 +90,16 @@ class RecordAccessBase(BaseModel):
 class RecordAccessCreate(RecordAccessBase):
     pass
 
+class RecordAccessUpdate(BaseModel):
+    access_level: Optional[str] = None
+    expires_at: Optional[str] = None
+
 class RecordAccess(RecordAccessBase):
     id: int
     granted_by: Optional[int] = None
     granted_at: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_at: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -26,7 +26,11 @@ backend:
   env:
     SECRET_KEY: "REPLACE-WITH-SECURE-SECRET-KEY"
     DATABASE_URL: "postgresql://user:password@postgres-service:5432/mazarbul_prod"
-    ALLOWED_ORIGINS: "https://mazarbul.com,https://www.mazarbul.com"
+    
+  corsOrigins:
+    - "https://mazarbul.com"
+    - "https://www.mazarbul.com"
+    - "https://api.mazarbul.com"
     
   ingress:
     enabled: true

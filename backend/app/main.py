@@ -26,10 +26,12 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Mazarbul API")
 
 # Enable CORS for frontend
-allowed_origins = os.getenv(
-    "ALLOWED_ORIGINS", 
-    "http://localhost:3000,http://127.0.0.1:3000,https://mazarbul.com,https://www.mazarbul.com"
-).split(",")
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",")]
+else:
+    # Development fallback
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 app.add_middleware(
     CORSMiddleware,

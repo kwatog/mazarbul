@@ -26,7 +26,10 @@ backend:
   env:
     SECRET_KEY: "staging-secret-key-change-me"
     DATABASE_URL: "sqlite:///./data/mazarbul-staging.db"
-    ALLOWED_ORIGINS: "https://staging.mazarbul.com,https://api-staging.mazarbul.com"
+    
+  corsOrigins:
+    - "https://staging.mazarbul.com"
+    - "https://api-staging.mazarbul.com"
     
   ingress:
     enabled: true

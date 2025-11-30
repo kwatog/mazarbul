@@ -43,6 +43,10 @@ spec:
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+            {{- if .Values.backend.corsOrigins }}
+            - name: ALLOWED_ORIGINS
+              value: {{ join "," .Values.backend.corsOrigins | quote }}
+            {{- end }}
           {{- if .Values.backend.healthCheck.enabled }}
           livenessProbe:
             httpGet:

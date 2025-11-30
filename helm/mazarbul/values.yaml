@@ -76,7 +76,11 @@ backend:
     DATABASE_URL: "sqlite:///./data/mazarbul.db"
     SECRET_KEY: "change-this-secret-key-for-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
-    ALLOWED_ORIGINS: "http://localhost:3000"
+    
+  # CORS allowed origins (list format)
+  corsOrigins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
     
   # Health checks
   healthCheck:

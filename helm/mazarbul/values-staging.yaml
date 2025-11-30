@@ -1,0 +1,81 @@
+# Staging environment values
+global:
+  imageRegistry: "your-registry.com"
+
+backend:
+  replicaCount: 2
+  
+  image:
+    tag: "staging-latest"
+    pullPolicy: Always
+    
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+      
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+      
+  env:
+    SECRET_KEY: "staging-secret-key"
+    DATABASE_URL: "sqlite:///./data/mazarbul-staging.db"
+    
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      cert-manager.io/cluster-issuer: "letsencrypt-staging"
+    hosts:
+      - host: api-staging.mazarbul.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: mazarbul-api-staging-tls
+        hosts:
+          - api-staging.mazarbul.com
+
+frontend:
+  replicaCount: 2
+  
+  image:
+    tag: "staging-latest"
+    pullPolicy: Always
+    
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+      
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+      
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      cert-manager.io/cluster-issuer: "letsencrypt-staging"
+    hosts:
+      - host: staging.mazarbul.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: mazarbul-frontend-staging-tls
+        hosts:
+          - staging.mazarbul.com

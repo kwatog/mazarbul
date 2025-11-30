@@ -1,0 +1,59 @@
+# Development environment values
+global:
+  imageRegistry: "localhost:5000"
+
+backend:
+  replicaCount: 1
+  
+  image:
+    tag: "development-latest"
+    pullPolicy: Always
+    
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+      
+  env:
+    SECRET_KEY: "development-secret-key"
+    DATABASE_URL: "sqlite:///./data/mazarbul-dev.db"
+    
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+    hosts:
+      - host: api-dev.mazarbul.local
+        paths:
+          - path: /
+            pathType: Prefix
+
+frontend:
+  replicaCount: 1
+  
+  image:
+    tag: "development-latest"
+    pullPolicy: Always
+    
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+      
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+    hosts:
+      - host: dev.mazarbul.local
+        paths:
+          - path: /
+            pathType: Prefix

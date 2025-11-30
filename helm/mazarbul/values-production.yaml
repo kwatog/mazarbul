@@ -1,0 +1,94 @@
+# Production environment values
+global:
+  imageRegistry: "your-registry.com"
+
+backend:
+  replicaCount: 3
+  
+  image:
+    tag: "production-latest"
+    pullPolicy: Always
+    
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+      
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+      
+  env:
+    SECRET_KEY: "production-secret-key"
+    DATABASE_URL: "postgresql://user:password@postgres-service:5432/mazarbul_prod"
+    
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: api.mazarbul.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: mazarbul-api-prod-tls
+        hosts:
+          - api.mazarbul.com
+          
+  # Production persistence
+  persistence:
+    enabled: true
+    storageClass: "fast-ssd"
+    size: 10Gi
+
+frontend:
+  replicaCount: 3
+  
+  image:
+    tag: "production-latest"
+    pullPolicy: Always
+    
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+      
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+      
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: mazarbul.com
+        paths:
+          - path: /
+            pathType: Prefix
+      - host: www.mazarbul.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: mazarbul-frontend-prod-tls
+        hosts:
+          - mazarbul.com
+          - www.mazarbul.com

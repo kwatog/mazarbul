@@ -1,0 +1,16 @@
+apiVersion: v2
+name: mazarbul
+description: Mazarbul Procurement Tracking System
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - procurement
+  - tracking
+  - fastapi
+  - nuxt
+home: https://github.com/mazarbul/mazarbul
+sources:
+  - https://github.com/mazarbul/mazarbul
+maintainers:
+  - name: Mazarbul Team
+    email: admin@mazarbul.com

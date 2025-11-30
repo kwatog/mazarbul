@@ -1,0 +1,19 @@
+{{- if and .Values.backend.enabled .Values.backend.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "mazarbul.fullname" . }}-backend-data
+  labels:
+    {{- include "mazarbul.backend.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- range .Values.backend.persistence.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backend.persistence.size | quote }}
+  {{- if .Values.backend.persistence.storageClass }}
+  storageClassName: {{ .Values.backend.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}

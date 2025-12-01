@@ -2,66 +2,81 @@
 
 This document captures a focused review of `requirements-codex.md` and the current codebase, with concrete, high‑impact recommendations.
 
+## Status Snapshot
+- Resolved:
+  - Record access revoke/update endpoints implemented (`DELETE` and `PUT`).
+  - Secrets and token expiry read from environment variables.
+  - CORS allowlist driven by `ALLOWED_ORIGINS` (no wildcard).
+  - Admin bootstrap gated by env (no default hardcoded password).
+  - Server now issues HttpOnly `access_token` cookie, and `/auth/refresh` + `/auth/logout` added.
+  - Helm chart now contains Deployments/Services/Ingress/HPA/PVC/ServiceAccounts.
+- Partial:
+  - SQLAlchemy `session.get(...)` adopted in record-access router; other routers still use deprecated `query(...).get(...)`.
+  - Frontend still expects token in JSON and stores JS-readable cookies; not fully aligned with HttpOnly cookie flow.
+- Open:
+  - No update endpoints (PUT/PATCH) for main entities; no UPDATE audit trail.
+  - List endpoints lack department/grant-based filtering and pagination.
+  - Timestamps stored as strings; DB constraints (Unique/Check) missing.
+  - No centralized access helper, migrations, or test/lint setup.
+
 ## Biggest Gaps
-- Record access revoke/update: Frontend calls `DELETE /record-access/{id}`, but backend lacks it. Add `DELETE /record-access/{id}` and `PUT /record-access/{id}` in `backend/app/routers/record_access.py`.
-- CRUD completeness: Routers mostly expose list/get/create/delete. Add update endpoints across all entities and audit logging for UPDATE.
-- Auth token handling: Spec calls for HTTP‑only cookies + refresh. Current flow returns token JSON and stores a readable cookie. Implement HttpOnly `Set-Cookie` on login, add refresh endpoint, and client retry on 401.
+- CRUD completeness [OPEN]: Routers mostly expose list/get/create/delete. Add update endpoints across all entities and audit logging for UPDATE.
+- Auth token handling [PARTIAL]: Backend uses HttpOnly cookies; frontend still expects token JSON and sets JS cookies. Align client to cookie-based auth.
 
 ## Security
-- Secrets: `backend/app/auth.py` hardcodes `SECRET_KEY`. Read `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` from env; fail fast if missing outside dev.
-- CORS + credentials: `allow_origins=["*"]` with credentials is unsafe/invalid. Drive allowlist from `ALLOWED_ORIGINS` env; disable credentials for wildcard.
-- Token storage: Use HttpOnly, Secure cookies (SameSite=Lax/Strict) set by backend instead of client-set cookies. Avoid exposing tokens to JS.
-- Default admin: Startup creates `admin/Admin123!` and prints it. Replace with env‑driven bootstrap (or disable by default) and never log secrets.
+- Secrets [RESOLVED]: `SECRET_KEY` and `ACCESS_TOKEN_EXPIRE_MINUTES` read from env.
+- CORS + credentials [RESOLVED]: Allowed origins from `ALLOWED_ORIGINS`; no wildcard with credentials.
+- Token storage [PARTIAL]: Server sets HttpOnly cookie; frontend must switch to `credentials: 'include'` and stop reading tokens in JS.
+- Default admin [RESOLVED]: Admin creation via env gating; no secret printing.
 
 ## Access Control
-- Department access & inheritance: Implement department scoping for `User` role and inheritance BC → WBS → Asset → PO → GR in all reads/writes. List endpoints currently return all rows to any authenticated user.
-- Centralize checks: Provide a utility to compute effective access (role, creator, group/user grants, department) to eliminate duplication and drift.
+- Department access & inheritance [OPEN]: Implement dept scoping for `User` role and inheritance BC → WBS → Asset → PO → GR across reads/writes. List endpoints currently return all rows.
+- Centralize checks [OPEN]: Provide a utility to compute effective access (role, creator, grants, department) to eliminate duplication.
 
 ## Audit Trail
-- Update coverage: Decorator logs CREATE/DELETE only and does not capture `old_values`. For UPDATE/DELETE, fetch record before change; for UPDATE, store both old/new (consider diffs to reduce noise).
-- Request context: Capture `ip_address` and `user_agent` consistently by passing FastAPI `Request` into the audit decorator or using middleware.
-- Naming consistency: Ensure `record_type` and audit `table_name` match actual tables/entities consistently.
+- Update coverage [OPEN]: Decorator logs CREATE/DELETE; capture `old_values` and `new_values` for UPDATE, and call it from update endpoints.
+- Request context [OPEN]: Capture `ip_address` and `user_agent` consistently via Request or middleware.
+- Naming consistency [OPEN]: Ensure `record_type` and audit `table_name` names are consistent.
 
 ## Backend Engineering
-- Datetimes: Store timestamps as `DateTime` (not strings); same for `expires_at`. String comparisons are brittle.
-- Constraints: Add DB constraints matching the spec:
+- Datetimes [OPEN]: Store timestamps as `DateTime` (not strings); same for `expires_at`.
+- Constraints [OPEN]:
   - `user_group_membership`: unique `(user_id, group_id)` via `UniqueConstraint`.
-  - `record_access`: check `(user_id IS NOT NULL OR group_id IS NOT NULL)`.
-- Pagination/filtering: Add `limit`, `offset`, and basic filters to list endpoints; avoid returning entire tables.
-- Migrations: Introduce Alembic for schema evolution instead of `Base.metadata.create_all`.
-- SQLAlchemy API: Replace deprecated `query.get(id)` with `session.get(Model, id)` for 2.x compatibility.
+  - `record_access`: `CHECK (user_id IS NOT NULL OR group_id IS NOT NULL)`.
+- Pagination/filtering [OPEN]: Add `limit`, `offset`, sorting, and basic filters to list endpoints.
+- Migrations [OPEN]: Introduce Alembic for schema evolution instead of `Base.metadata.create_all`.
+- SQLAlchemy API [PARTIAL]: Replace deprecated `query.get(id)` with `session.get(Model, id)` across routers.
 
 ## Frontend
-- Auth flow: Centralize API calls with a composable/plugin to inject Authorization and handle 401 → refresh → retry. Remove per-component header plumbing.
-- Role guards: Use route middleware for role‑gated routes (e.g., `/admin/...`); continue to enforce on the backend.
-- Health endpoint: Keep `pages/health.vue`; consider a lightweight Nitro server route (`server/api/health.get.ts`) returning JSON for probes.
-- UX coverage: Add PO detail with GRs and remaining calculation, an alerts page consuming `/alerts`, and inline editing for CRUD completeness.
+- Auth flow [OPEN]: Centralize API calls with a composable/plugin that uses `credentials: 'include'`, handles 401 → `/auth/refresh` → retry, and removes per-component token headers.
+- Role guards [OPEN]: Use route middleware for role‑gated pages (still enforce on backend).
+- Health endpoint [OK]: `pages/health.vue` exists; optionally add a tiny server route returning JSON.
+- UX coverage [OPEN]: Add PO detail with GRs and remaining calc, alerts page consuming `/alerts`, and inline editing for CRUD.
 
 ## DevOps/CI/CD
-- Helm chart: `helm/mazarbul/templates` is empty. Add Deployments, Services, Ingress, ConfigMaps/Secrets, and optional PVC for SQLite. Wire values from `values-*.yaml`.
-- Config as env: Backend should read `DATABASE_URL`, `ALLOWED_ORIGINS`, `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`. Frontend already uses `NUXT_API_BASE` variants.
-- Jenkinsfile: Solid structure, but it assumes a working Helm chart. Add templates or make the pipeline fail fast with clear messaging when templates are missing.
-- Artifacts: `mazarbul.db` is committed. Remove it from repo; `.gitignore` already covers future DB files.
+- Helm chart [RESOLVED]: Templates added for Deployments/Services/Ingress/HPA/PVC/ServiceAccounts.
+- Config as env [RESOLVED]: Backend reads key env vars; frontend already supports `NUXT_*` API base.
+- Jenkinsfile [INFO]: Pipeline assumes charts exist (now present). Keep validation steps to fail fast on misconfig.
+- Artifacts [PARTIAL]: `mazarbul.db` exists locally but is not committed (ignored). Ensure DB files never enter VCS.
 
 ## Data Model
-- Required fields: Enforce NOT NULL where implied (e.g., `po_number`, dates). Add indexes for frequent lookups (`po_number`, `wbs_code`, `asset_code`).
-- Money handling: Consider `Decimal` for amounts to avoid float rounding issues; validate known currency set.
+- Required fields [OPEN]: Enforce NOT NULL where implied (e.g., `po_number`, dates). Add indexes on `po_number`, `wbs_code`, `asset_code`.
+- Money handling [OPEN]: Consider `Decimal` for amounts; validate currency codes.
 
 ## Testing and Quality
-- Minimal tests: Auth (happy/negative), access control for one entity, audit logging on create/update/delete, alerts edge cases.
-- Lint/type checks: Add ruff/black/mypy for backend; ESLint/TypeScript strict for frontend. Integrate into Jenkins as fast‑fail steps.
+- Minimal tests [OPEN]: Auth (happy/negative), access control, audit create/update/delete, alerts edges.
+- Lint/type checks [OPEN]: Add ruff/black/mypy for backend; ESLint/TypeScript strict for frontend. Integrate into CI as fast‑fail.
 
-## Quick Wins
-- Env‑driven secrets and CORS in `auth.py` and `main.py`.
-- Add `DELETE /record-access/{id}` and `PUT /record-access/{id}` to match frontend.
-- Implement UPDATE + audit for one entity (e.g., PurchaseOrder) as a reference pattern.
-- Add `UniqueConstraint` to `UserGroupMembership`; confirm duplicate handling.
-- Add `limit`/`offset` and default sorting to list endpoints.
+## Quick Wins (Updated)
+- Align frontend auth with cookies: use `credentials: 'include'`, remove JS token storage, and add refresh-retry wrapper.
+- Add `PUT /purchase-orders/{id}` with UPDATE audit as a reference; replicate to other entities.
+- Add pagination (`limit`/`offset`) and default sorting to list endpoints.
+- Replace remaining `query(...).get(...)` with `session.get(...)`.
+- Add `UniqueConstraint` on group membership and `CHECK` on record_access.
 
 ## Suggested Next Steps
-1. Patch record access DELETE/PUT and fix CORS/secret env reading.
-2. Add UPDATE endpoints + audit for PurchaseOrder and propagate to other entities.
-3. Implement HttpOnly cookie login + refresh endpoint; add frontend retry on 401.
-4. Introduce pagination on list endpoints; add basic filters.
-5. Scaffold Helm templates for backend/frontend and wire Jenkins to validate charts.
-
+1. Frontend: switch to cookie-based auth and add a unified `$fetch` wrapper with refresh-on-401.
+2. Backend: implement a sample update + audit (PurchaseOrder), then propagate.
+3. Lists: add dept/grant-based scoping for User role and pagination.
+4. Schema: add constraints and migrate timestamps to `DateTime` (introduce Alembic).
+5. Replace deprecated SQLAlchemy calls across routers and add basic tests.

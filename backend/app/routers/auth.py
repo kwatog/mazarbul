@@ -55,12 +55,12 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
         expires_delta=access_token_expires
     )
     
-    # Set HttpOnly cookie
+    # Set HttpOnly cookie (secure=False for localhost/development)
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,  # Enable in production with HTTPS
+        secure=False,  # Set to True in production with HTTPS
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert to seconds
     )
@@ -76,7 +76,7 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
     response.set_cookie(
         key="user_info",
         value=schemas.UserInfo(**user_info).model_dump_json(),
-        secure=True,
+        secure=False,  # Set to True in production with HTTPS
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
@@ -118,7 +118,7 @@ def refresh_token(request: Request, response: Response, db: Session = Depends(ge
         key="access_token",
         value=new_access_token,
         httponly=True,
-        secure=True,
+        secure=False,  # Set to True in production with HTTPS
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
@@ -133,7 +133,7 @@ def refresh_token(request: Request, response: Response, db: Session = Depends(ge
     response.set_cookie(
         key="user_info",
         value=schemas.UserInfo(**user_info).model_dump_json(),
-        secure=True,
+        secure=False,  # Set to True in production with HTTPS
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )

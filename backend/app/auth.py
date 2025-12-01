@@ -14,7 +14,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "development-fallback-key-change-for-produc
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 # We use OAuth2PasswordBearer for Swagger UI compatibility, but logic allows custom header too
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 

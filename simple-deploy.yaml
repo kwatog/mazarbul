@@ -29,7 +29,6 @@ spec:
           git clone https://github.com/kwatog/mazarbul.git /app
           cd /app/backend
           pip install -r requirements.txt
-          pip install --upgrade bcrypt==4.0.1
           export DATABASE_URL=sqlite:///./data/mazarbul.db
           export SECRET_KEY=minikube-dev-secret-key
           export ACCESS_TOKEN_EXPIRE_MINUTES=1440

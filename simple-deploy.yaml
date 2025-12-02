@@ -31,7 +31,7 @@ spec:
           pip install -r requirements.txt
           mkdir -p data
           echo "Starting backend server..."
-          uvicorn app.main:app --host 0.0.0.0 --port 8000
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug
         ports:
         - containerPort: 8000
         env:
@@ -42,7 +42,7 @@ spec:
         - name: ACCESS_TOKEN_EXPIRE_MINUTES
           value: "1440"
         - name: ALLOWED_ORIGINS
-          value: "http://localhost:3000"
+          value: "http://192.168.49.2:30081,http://localhost:3000"
         - name: CREATE_ADMIN_USER
           value: "true"
         - name: ADMIN_USERNAME
@@ -99,7 +99,10 @@ spec:
           echo "Installing dependencies..."
           npm install
           echo "Building frontend..."
-          export NUXT_PUBLIC_API_BASE=http://localhost:8000
+          # Backend URL for Server-Side Rendering (within Cluster)
+          export NUXT_API_BASE=http://mazarbul-backend:8000
+          # Backend URL for Client-Side Browser (Minikube IP)
+          export NUXT_PUBLIC_API_BASE=http://192.168.49.2:30080
           npm run build
           echo "Starting frontend server..."
           node .output/server/index.mjs

@@ -81,4 +81,4 @@ temp/
 
 # Helm charts
 helm/*/charts/
-helm/*/Chart.lock
+helm/*/Chart.lockfrontend/test-results/

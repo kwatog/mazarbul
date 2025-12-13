@@ -12,6 +12,13 @@ Frontend:
 - Install deps and run: `npm run dev`
 - App: `http://localhost:3000`
 
+## Testing (frontend)
+
+- Unit tests: `npm run test:unit`
+- E2E tests: `npm run test:e2e`
+
+Note: Playwright requires browser binaries. If they are not present in your environment, run `npx playwright install`.
+
 ## Environment variables (backend)
 
 - `DATABASE_URL` — SQLAlchemy connection string.
@@ -26,4 +33,3 @@ Optional admin bootstrap:
 - `ADMIN_PASSWORD`
 - `ADMIN_EMAIL`
 - `ADMIN_FULL_NAME`
-

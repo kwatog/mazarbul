@@ -60,3 +60,27 @@ async def delete_purchase_order(
     db.delete(po)
     db.commit()
     return {"status": "deleted", "id": po_id}
+
+@router.put("/{po_id}", response_model=schemas.PurchaseOrder)
+@audit_log_change(action="UPDATE", table_name="purchase_order")
+async def update_purchase_order(
+    po_id: int,
+    po_update: schemas.PurchaseOrderUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(check_record_access("PurchaseOrder", "po_id", "Write"))
+):
+    po = db.query(models.PurchaseOrder).get(po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="PurchaseOrder not found")
+
+    # Apply updates (only provided fields)
+    data = po_update.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(po, k, v)
+    po.updated_by = current_user.id
+    po.updated_at = datetime.utcnow().isoformat()
+
+    db.commit()
+    db.refresh(po)
+    return po

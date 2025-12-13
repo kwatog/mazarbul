@@ -27,12 +27,8 @@ const selectedPO = ref<PurchaseOrder | null>(null)
 
 const fetchPOs = async () => {
   try {
-    const res = await $fetch<PurchaseOrder[]>(`${apiBase}/purchase-orders`, {
-      headers: {
-        Authorization: `Bearer ${token.value}`
-      }
-    })
-    pos.value = res
+    const res = await useApiFetch<PurchaseOrder[]>(`/purchase-orders`)
+    pos.value = res as any
   } catch (e: any) {
     console.error(e)
     error.value = 'Failed to load purchase orders.'

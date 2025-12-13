@@ -63,9 +63,7 @@ const fetchRecordAccess = async () => {
   
   try {
     loading.value = true
-    const res = await $fetch<RecordAccess[]>(`${apiBase}/record-access/${props.recordType}/${props.recordId}`, {
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    const res = await useApiFetch<RecordAccess[]>(`/record-access/${props.recordType}/${props.recordId}`)
     accesses.value = res
   } catch (e: any) {
     error.value = 'Failed to load access permissions'
@@ -76,9 +74,7 @@ const fetchRecordAccess = async () => {
 
 const fetchUsers = async () => {
   try {
-    const res = await $fetch<User[]>(`${apiBase}/users`, {
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    const res = await useApiFetch<User[]>(`/users`)
     users.value = res
   } catch (e: any) {
     console.error('Failed to load users:', e)
@@ -87,9 +83,7 @@ const fetchUsers = async () => {
 
 const fetchGroups = async () => {
   try {
-    const res = await $fetch<UserGroup[]>(`${apiBase}/user-groups`, {
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    const res = await useApiFetch<UserGroup[]>(`/user-groups`)
     groups.value = res
   } catch (e: any) {
     console.error('Failed to load groups:', e)
@@ -107,14 +101,7 @@ const grantAccess = async () => {
       expires_at: newAccess.value.expires_at || null
     }
 
-    await $fetch(`${apiBase}/record-access`, {
-      method: 'POST',
-      headers: { 
-        Authorization: `Bearer ${token.value}`,
-        'Content-Type': 'application/json'
-      },
-      body: payload
-    })
+    await useApiFetch(`/record-access`, { method: 'POST', body: payload })
     
     // Reset form
     newAccess.value = {
@@ -134,10 +121,7 @@ const grantAccess = async () => {
 
 const revokeAccess = async (accessId: number) => {
   try {
-    await $fetch(`${apiBase}/record-access/${accessId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    await useApiFetch(`/record-access/${accessId}`, { method: 'DELETE' })
     
     await fetchRecordAccess()
     emit('updated')

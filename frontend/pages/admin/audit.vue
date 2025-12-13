@@ -47,9 +47,7 @@ const filters = ref({
 const fetchAuditLogs = async () => {
   try {
     loading.value = true
-    const res = await $fetch<AuditLog[]>(`${apiBase}/audit-logs`, {
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    const res = await useApiFetch<AuditLog[]>(`/audit-logs`)
     auditLogs.value = res
   } catch (e: any) {
     error.value = 'Failed to load audit logs'
@@ -61,9 +59,7 @@ const fetchAuditLogs = async () => {
 
 const fetchUsers = async () => {
   try {
-    const res = await $fetch<User[]>(`${apiBase}/users`, {
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    const res = await useApiFetch<User[]>(`/users`)
     users.value = res
   } catch (e: any) {
     console.error('Failed to load users:', e)

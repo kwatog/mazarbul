@@ -14,8 +14,9 @@ const login = async () => {
   error.value = null
   
   try {
-    const response = await $fetch<{access_token: string, user: any}>(`${apiBase}/auth/login`, {
+    const response = await $fetch<{message: string, user: any}>(`${apiBase}/auth/login`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         username: form.value.username,
@@ -23,11 +24,8 @@ const login = async () => {
       })
     })
     
-    // Store token in a cookie
-    const token = useCookie('access_token', { maxAge: 60 * 60 * 24 * 7 }) // 7 days
-    token.value = response.access_token
-
-    // Store user info in a state or cookie
+    // Backend sets HttpOnly access_token and user_info cookies.
+    // As a precaution, also write user_info to keep UI in sync quickly.
     const userCookie = useCookie('user_info')
     userCookie.value = JSON.stringify(response.user)
     

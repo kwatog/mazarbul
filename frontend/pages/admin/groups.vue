@@ -54,9 +54,7 @@ const selectedUserId = ref<number | null>(null)
 
 const fetchGroups = async () => {
   try {
-    const res = await $fetch<UserGroup[]>(`${apiBase}/user-groups`, {
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    const res = await useApiFetch<UserGroup[]>(`/user-groups`)
     groups.value = res
   } catch (e: any) {
     error.value = 'Failed to load groups'
@@ -66,9 +64,7 @@ const fetchGroups = async () => {
 
 const fetchUsers = async () => {
   try {
-    const res = await $fetch<User[]>(`${apiBase}/users`, {
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    const res = await useApiFetch<User[]>(`/users`)
     users.value = res
   } catch (e: any) {
     console.error('Failed to load users:', e)
@@ -77,9 +73,7 @@ const fetchUsers = async () => {
 
 const fetchGroupMembers = async (groupId: number) => {
   try {
-    const res = await $fetch<GroupMembership[]>(`${apiBase}/user-groups/${groupId}/members`, {
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    const res = await useApiFetch<GroupMembership[]>(`/user-groups/${groupId}/members`)
     groupMembers.value = res
   } catch (e: any) {
     error.value = 'Failed to load group members'
@@ -88,14 +82,7 @@ const fetchGroupMembers = async (groupId: number) => {
 
 const createGroup = async () => {
   try {
-    await $fetch(`${apiBase}/user-groups`, {
-      method: 'POST',
-      headers: { 
-        Authorization: `Bearer ${token.value}`,
-        'Content-Type': 'application/json'
-      },
-      body: newGroup.value
-    })
+    await useApiFetch(`/user-groups`, { method: 'POST', body: newGroup.value })
     
     newGroup.value = { name: '', description: '' }
     showCreateGroupModal.value = false
@@ -109,12 +96,8 @@ const addMemberToGroup = async () => {
   if (!selectedGroup.value || !selectedUserId.value) return
   
   try {
-    await $fetch(`${apiBase}/user-groups/${selectedGroup.value.id}/members`, {
+    await useApiFetch(`/user-groups/${selectedGroup.value.id}/members`, {
       method: 'POST',
-      headers: { 
-        Authorization: `Bearer ${token.value}`,
-        'Content-Type': 'application/json'
-      },
       body: {
         user_id: selectedUserId.value,
         group_id: selectedGroup.value.id
@@ -133,10 +116,7 @@ const removeMemberFromGroup = async (userId: number) => {
   if (!selectedGroup.value) return
   
   try {
-    await $fetch(`${apiBase}/user-groups/${selectedGroup.value.id}/members/${userId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token.value}` }
-    })
+    await useApiFetch(`/user-groups/${selectedGroup.value.id}/members/${userId}`, { method: 'DELETE' })
     
     await fetchGroupMembers(selectedGroup.value.id)
   } catch (e: any) {

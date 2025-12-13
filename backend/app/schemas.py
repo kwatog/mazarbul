@@ -202,6 +202,15 @@ class PurchaseOrder(PurchaseOrderBase, AuditMixin):
     class Config:
         from_attributes = True
 
+class PurchaseOrderUpdate(BaseModel):
+    supplier: Optional[str] = None
+    po_type: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    total_amount: Optional[float] = None
+    currency: Optional[str] = None
+    status: Optional[str] = None
+
 
 # --- GoodsReceipt ---
 class GoodsReceiptBase(BaseModel):

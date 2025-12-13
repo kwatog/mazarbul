@@ -37,6 +37,12 @@ yarn-error.log*
 .output/
 .env
 
+# Local Nuxt build artifacts sometimes written under frontend/
+frontend/app/
+
+# Test output artifacts
+frontend/test-results/
+
 # Database
 *.db
 *.sqlite
@@ -78,6 +84,14 @@ coverage/
 # Temporary files
 .tmp/
 temp/
+
+# Local API debugging artifacts
+cookies.txt
+headers.txt
+
+# Local/variant files (do not commit)
+**/*-SER5.*
+**/*-SER5
 
 # Helm charts
 helm/*/charts/

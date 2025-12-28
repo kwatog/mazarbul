@@ -131,17 +131,53 @@ class AuditMixin(BaseModel):
     updated_at: Optional[str] = None
 
 
+# --- BudgetItem ---
+class BudgetItemBase(BaseModel):
+    workday_ref: str
+    title: str
+    description: Optional[str] = None
+    budget_amount: float
+    currency: str
+    fiscal_year: int
+    owner_group_id: int
+
+class BudgetItemCreate(BudgetItemBase):
+    pass
+
+class BudgetItemUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    budget_amount: Optional[float] = None
+    currency: Optional[str] = None
+    fiscal_year: Optional[int] = None
+
+class BudgetItem(BudgetItemBase, AuditMixin):
+    id: int
+    class Config:
+        from_attributes = True
+
+
 # --- BusinessCase ---
 class BusinessCaseBase(BaseModel):
     title: str
     description: Optional[str] = None
     requestor: Optional[str] = None
     dept: Optional[str] = None
+    lead_group_id: Optional[int] = None
     estimated_cost: Optional[float] = None
     status: Optional[str] = "Draft"
 
 class BusinessCaseCreate(BusinessCaseBase):
     pass
+
+class BusinessCaseUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    requestor: Optional[str] = None
+    dept: Optional[str] = None
+    lead_group_id: Optional[int] = None
+    estimated_cost: Optional[float] = None
+    status: Optional[str] = None
 
 class BusinessCase(BusinessCaseBase, AuditMixin):
     id: int
@@ -149,15 +185,52 @@ class BusinessCase(BusinessCaseBase, AuditMixin):
         from_attributes = True
 
 
+# --- BusinessCaseLineItem ---
+class BusinessCaseLineItemBase(BaseModel):
+    business_case_id: int
+    budget_item_id: int
+    owner_group_id: int
+    title: str
+    description: Optional[str] = None
+    spend_category: str  # CAPEX or OPEX
+    requested_amount: float
+    currency: str
+    planned_commit_date: Optional[str] = None
+    status: Optional[str] = "Draft"
+
+class BusinessCaseLineItemCreate(BusinessCaseLineItemBase):
+    pass
+
+class BusinessCaseLineItemUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    spend_category: Optional[str] = None
+    requested_amount: Optional[float] = None
+    currency: Optional[str] = None
+    planned_commit_date: Optional[str] = None
+    status: Optional[str] = None
+
+class BusinessCaseLineItem(BusinessCaseLineItemBase, AuditMixin):
+    id: int
+    class Config:
+        from_attributes = True
+
+
 # --- WBS ---
 class WBSBase(BaseModel):
-    business_case_id: int
+    business_case_line_item_id: int
     wbs_code: str
     description: Optional[str] = None
+    owner_group_id: int
     status: Optional[str] = "Active"
 
 class WBSCreate(WBSBase):
     pass
+
+class WBSUpdate(BaseModel):
+    wbs_code: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
 
 class WBS(WBSBase, AuditMixin):
     id: int
@@ -169,12 +242,19 @@ class WBS(WBSBase, AuditMixin):
 class AssetBase(BaseModel):
     wbs_id: int
     asset_code: str
-    asset_type: Optional[str] = "Capex"
+    asset_type: Optional[str] = "CAPEX"
     description: Optional[str] = None
+    owner_group_id: int
     status: Optional[str] = "Active"
 
 class AssetCreate(AssetBase):
     pass
+
+class AssetUpdate(BaseModel):
+    asset_code: Optional[str] = None
+    asset_type: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
 
 class Asset(AssetBase, AuditMixin):
     id: int
@@ -186,30 +266,39 @@ class Asset(AssetBase, AuditMixin):
 class PurchaseOrderBase(BaseModel):
     asset_id: int
     po_number: str
+    ariba_pr_number: Optional[str] = None
     supplier: Optional[str] = None
     po_type: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     total_amount: float
     currency: str
+    spend_category: str  # CAPEX or OPEX
+    planned_commit_date: Optional[str] = None
+    actual_commit_date: Optional[str] = None
+    owner_group_id: int
     status: Optional[str] = "Open"
 
 class PurchaseOrderCreate(PurchaseOrderBase):
     pass
 
-class PurchaseOrder(PurchaseOrderBase, AuditMixin):
-    id: int
-    class Config:
-        from_attributes = True
-
 class PurchaseOrderUpdate(BaseModel):
+    ariba_pr_number: Optional[str] = None
     supplier: Optional[str] = None
     po_type: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     total_amount: Optional[float] = None
     currency: Optional[str] = None
+    spend_category: Optional[str] = None
+    planned_commit_date: Optional[str] = None
+    actual_commit_date: Optional[str] = None
     status: Optional[str] = None
+
+class PurchaseOrder(PurchaseOrderBase, AuditMixin):
+    id: int
+    class Config:
+        from_attributes = True
 
 
 # --- GoodsReceipt ---
@@ -219,9 +308,15 @@ class GoodsReceiptBase(BaseModel):
     gr_date: Optional[str] = None
     amount: float
     description: Optional[str] = None
+    owner_group_id: int
 
 class GoodsReceiptCreate(GoodsReceiptBase):
     pass
+
+class GoodsReceiptUpdate(BaseModel):
+    gr_date: Optional[str] = None
+    amount: Optional[float] = None
+    description: Optional[str] = None
 
 class GoodsReceipt(GoodsReceiptBase, AuditMixin):
     id: int
@@ -237,10 +332,20 @@ class ResourceBase(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     cost_per_month: Optional[float] = None
+    owner_group_id: int
     status: Optional[str] = "Active"
 
 class ResourceCreate(ResourceBase):
     pass
+
+class ResourceUpdate(BaseModel):
+    name: Optional[str] = None
+    vendor: Optional[str] = None
+    role: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    cost_per_month: Optional[float] = None
+    status: Optional[str] = None
 
 class Resource(ResourceBase, AuditMixin):
     id: int
@@ -255,11 +360,29 @@ class ResourcePOAllocationBase(BaseModel):
     allocation_start: Optional[str] = None
     allocation_end: Optional[str] = None
     expected_monthly_burn: Optional[float] = None
+    owner_group_id: int
 
 class ResourcePOAllocationCreate(ResourcePOAllocationBase):
     pass
+
+class ResourcePOAllocationUpdate(BaseModel):
+    allocation_start: Optional[str] = None
+    allocation_end: Optional[str] = None
+    expected_monthly_burn: Optional[float] = None
 
 class ResourcePOAllocation(ResourcePOAllocationBase, AuditMixin):
     id: int
     class Config:
         from_attributes = True
+
+
+# --- Pagination ---
+class PaginationParams(BaseModel):
+    skip: int = 0
+    limit: int = 100
+
+class PaginatedResponse(BaseModel):
+    items: List[BaseModel]
+    total: int
+    skip: int
+    limit: int

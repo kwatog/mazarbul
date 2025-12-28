@@ -11,8 +11,10 @@ from .routers import (
     user_groups,
     record_access,
     audit_logs,
+    budget_items,
     purchase_orders,
     business_cases,
+    business_case_line_items,
     wbs,
     assets,
     goods_receipts,
@@ -57,8 +59,10 @@ app.include_router(users.router)
 app.include_router(user_groups.router)
 app.include_router(record_access.router)
 app.include_router(audit_logs.router)
+app.include_router(budget_items.router)
 app.include_router(purchase_orders.router)
 app.include_router(business_cases.router)
+app.include_router(business_case_line_items.router)
 app.include_router(wbs.router)
 app.include_router(assets.router)
 app.include_router(goods_receipts.router)

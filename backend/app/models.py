@@ -73,6 +73,27 @@ class AuditLog(Base):
     user_agent = Column(Text, nullable=True)
 
 
+class BudgetItem(Base):
+    __tablename__ = "budget_item"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workday_ref = Column(String(255), unique=True, nullable=False, index=True)
+    title = Column(Text, nullable=False)
+    description = Column(Text)
+    budget_amount = Column(Float, nullable=False)
+    currency = Column(String(10), nullable=False)
+    fiscal_year = Column(Integer, nullable=False)
+    owner_group_id = Column(Integer, ForeignKey("user_group.id"), nullable=False)
+
+    # Audit
+    created_by = Column(Integer, ForeignKey("user.id"))
+    updated_by = Column(Integer, ForeignKey("user.id"))
+    created_at = Column(String(32))
+    updated_at = Column(String(32))
+
+    line_items = relationship("BusinessCaseLineItem", back_populates="budget_item")
+
+
 class BusinessCase(Base):
     __tablename__ = "business_case"
 
@@ -81,25 +102,53 @@ class BusinessCase(Base):
     description = Column(Text)
     requestor = Column(String(255))
     dept = Column(String(255))
+    lead_group_id = Column(Integer, ForeignKey("user_group.id"))
     estimated_cost = Column(Float)
     status = Column(String(50))
-    
+
     # Audit
     created_by = Column(Integer, ForeignKey("user.id"))
     updated_by = Column(Integer, ForeignKey("user.id"))
     created_at = Column(String(32))
     updated_at = Column(String(32))
 
-    wbs_items = relationship("WBS", back_populates="business_case")
+    line_items = relationship("BusinessCaseLineItem", back_populates="business_case")
+
+
+class BusinessCaseLineItem(Base):
+    __tablename__ = "business_case_line_item"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_case_id = Column(Integer, ForeignKey("business_case.id"), nullable=False)
+    budget_item_id = Column(Integer, ForeignKey("budget_item.id"), nullable=False)
+    owner_group_id = Column(Integer, ForeignKey("user_group.id"), nullable=False)
+    title = Column(Text, nullable=False)
+    description = Column(Text)
+    spend_category = Column(String(20), nullable=False)  # CAPEX, OPEX
+    requested_amount = Column(Float, nullable=False)
+    currency = Column(String(10), nullable=False)
+    planned_commit_date = Column(String(32))
+    status = Column(String(50))
+
+    # Audit
+    created_by = Column(Integer, ForeignKey("user.id"))
+    updated_by = Column(Integer, ForeignKey("user.id"))
+    created_at = Column(String(32))
+    updated_at = Column(String(32))
+
+    business_case = relationship("BusinessCase", back_populates="line_items")
+    budget_item = relationship("BudgetItem", back_populates="line_items")
+    wbs_items = relationship("WBS", back_populates="line_item")
 
 
 class WBS(Base):
     __tablename__ = "wbs"
 
     id = Column(Integer, primary_key=True, index=True)
-    business_case_id = Column(Integer, ForeignKey("business_case.id"))
-    wbs_code = Column(String(255), unique=True)
+    business_case_line_item_id = Column(Integer, ForeignKey("business_case_line_item.id"), nullable=False)
+    wbs_code = Column(String(255), unique=True, index=True)
     description = Column(Text)
+    owner_group_id = Column(Integer, ForeignKey("user_group.id"), nullable=False)
     status = Column(String(50))
 
     # Audit
@@ -108,7 +157,7 @@ class WBS(Base):
     created_at = Column(String(32))
     updated_at = Column(String(32))
 
-    business_case = relationship("BusinessCase", back_populates="wbs_items")
+    line_item = relationship("BusinessCaseLineItem", back_populates="wbs_items")
     assets = relationship("Asset", back_populates="wbs")
 
 
@@ -117,9 +166,10 @@ class Asset(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     wbs_id = Column(Integer, ForeignKey("wbs.id"))
-    asset_code = Column(String(255), unique=True)
+    asset_code = Column(String(255), unique=True, index=True)
     asset_type = Column(String(50))
     description = Column(Text)
+    owner_group_id = Column(Integer, ForeignKey("user_group.id"), nullable=False)
     status = Column(String(50))
 
     # Audit
@@ -138,12 +188,17 @@ class PurchaseOrder(Base):
     id = Column(Integer, primary_key=True, index=True)
     asset_id = Column(Integer, ForeignKey("asset.id"))
     po_number = Column(String(255), unique=True, index=True)
+    ariba_pr_number = Column(String(255))
     supplier = Column(String(255))
     po_type = Column(String(50))
     start_date = Column(String(32))
     end_date = Column(String(32))
     total_amount = Column(Float)
     currency = Column(String(10))
+    spend_category = Column(String(20), nullable=False)  # CAPEX, OPEX
+    planned_commit_date = Column(String(32))
+    actual_commit_date = Column(String(32))
+    owner_group_id = Column(Integer, ForeignKey("user_group.id"), nullable=False)
     status = Column(String(50))
 
     # Audit
@@ -166,6 +221,7 @@ class GoodsReceipt(Base):
     gr_date = Column(String(32))
     amount = Column(Float)
     description = Column(Text)
+    owner_group_id = Column(Integer, ForeignKey("user_group.id"), nullable=False)
 
     # Audit
     created_by = Column(Integer, ForeignKey("user.id"))
@@ -186,6 +242,7 @@ class Resource(Base):
     start_date = Column(String(32))
     end_date = Column(String(32))
     cost_per_month = Column(Float)
+    owner_group_id = Column(Integer, ForeignKey("user_group.id"), nullable=False)
     status = Column(String(50))
 
     # Audit
@@ -206,6 +263,7 @@ class ResourcePOAllocation(Base):
     allocation_start = Column(String(32))
     allocation_end = Column(String(32))
     expected_monthly_burn = Column(Float)
+    owner_group_id = Column(Integer, ForeignKey("user_group.id"), nullable=False)
 
     # Audit
     created_by = Column(Integer, ForeignKey("user.id"))

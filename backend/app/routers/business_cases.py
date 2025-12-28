@@ -10,10 +10,27 @@ router = APIRouter(prefix="/business-cases", tags=["business-cases"])
 
 @router.get("/", response_model=List[schemas.BusinessCase])
 def list_business_cases(
+    skip: int = 0,
+    limit: int = 100,
+    status: str = None,
+    requestor: str = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    return db.query(models.BusinessCase).all()
+    """List all business cases with pagination and filtering."""
+    query = db.query(models.BusinessCase)
+
+    # Apply filters
+    if status:
+        query = query.filter(models.BusinessCase.status == status)
+    if requestor:
+        query = query.filter(models.BusinessCase.requestor.ilike(f"%{requestor}%"))
+
+    # Order by created_at descending
+    query = query.order_by(models.BusinessCase.created_at.desc())
+
+    # Apply pagination
+    return query.offset(skip).limit(limit).all()
 
 @router.get("/{bc_id}", response_model=schemas.BusinessCase)
 def get_business_case(

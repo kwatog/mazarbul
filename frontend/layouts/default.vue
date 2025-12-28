@@ -31,8 +31,11 @@ const isAdminOrManager = computed(() => {
       <div class="flex items-center gap-4">
         <nav style="display: flex; align-items: center; gap: 1rem;">
           <NuxtLink to="/">Dashboard</NuxtLink>
+          <NuxtLink to="/budget-items">Budget Items</NuxtLink>
+          <NuxtLink to="/business-cases">Business Cases</NuxtLink>
+          <NuxtLink to="/line-items">Line Items</NuxtLink>
           <NuxtLink to="/purchase-orders">Purchase Orders</NuxtLink>
-          
+
           <template v-if="isAdminOrManager">
             <NuxtLink to="/admin/groups">Groups</NuxtLink>
             <NuxtLink to="/admin/audit">Audit Logs</NuxtLink>

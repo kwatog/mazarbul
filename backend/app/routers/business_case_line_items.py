@@ -31,6 +31,32 @@ def list_line_items(
     """List all business case line items with pagination and filtering."""
     query = db.query(models.BusinessCaseLineItem)
 
+    # CRITICAL: Filter by owner_group_id access (only show records user can access)
+    if current_user.role not in ["Admin", "Manager"]:
+        # Get all groups the user is a member of
+        user_groups = db.query(models.UserGroupMembership).filter(
+            models.UserGroupMembership.user_id == current_user.id
+        ).all()
+        group_ids = [membership.group_id for membership in user_groups]
+
+        # Filter to accessible records
+        accessible_ids_query = db.query(models.BusinessCaseLineItem.id).filter(
+            (models.BusinessCaseLineItem.owner_group_id.in_(group_ids)) |
+            (models.BusinessCaseLineItem.created_by == current_user.id)
+        )
+
+        # Add explicit RecordAccess grants
+        explicit_access = db.query(models.RecordAccess.record_id).filter(
+            models.RecordAccess.record_type == "BusinessCaseLineItem",
+            models.RecordAccess.user_id == current_user.id,
+            (models.RecordAccess.expires_at.is_(None)) | (models.RecordAccess.expires_at > datetime.utcnow().isoformat())
+        )
+
+        accessible_ids = [item.id for item in accessible_ids_query.all()]
+        accessible_ids += [access.record_id for access in explicit_access.all()]
+
+        query = query.filter(models.BusinessCaseLineItem.id.in_(accessible_ids))
+
     # Apply filters
     if business_case_id:
         query = query.filter(models.BusinessCaseLineItem.business_case_id == business_case_id)

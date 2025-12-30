@@ -28,7 +28,35 @@ def list_budget_items(
     current_user: models.User = Depends(get_current_user)
 ):
     """List all budget items with pagination and filtering."""
+    from app.auth import user_in_owner_group
+
     query = db.query(models.BudgetItem)
+
+    # CRITICAL: Filter by owner_group_id access (only show records user can access)
+    if current_user.role not in ["Admin", "Manager"]:
+        # Get all groups the user is a member of
+        user_groups = db.query(models.UserGroupMembership).filter(
+            models.UserGroupMembership.user_id == current_user.id
+        ).all()
+        group_ids = [membership.group_id for membership in user_groups]
+
+        # Filter to records owned by user's groups OR created by user OR explicit RecordAccess grants
+        accessible_ids_query = db.query(models.BudgetItem.id).filter(
+            (models.BudgetItem.owner_group_id.in_(group_ids)) |
+            (models.BudgetItem.created_by == current_user.id)
+        )
+
+        # Add explicit RecordAccess grants
+        explicit_access = db.query(models.RecordAccess.record_id).filter(
+            models.RecordAccess.record_type == "BudgetItem",
+            models.RecordAccess.user_id == current_user.id,
+            (models.RecordAccess.expires_at.is_(None)) | (models.RecordAccess.expires_at > datetime.utcnow().isoformat())
+        )
+
+        accessible_ids = [item.id for item in accessible_ids_query.all()]
+        accessible_ids += [access.record_id for access in explicit_access.all()]
+
+        query = query.filter(models.BudgetItem.id.in_(accessible_ids))
 
     # Apply filters
     if fiscal_year:

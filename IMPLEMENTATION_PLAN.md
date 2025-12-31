@@ -161,25 +161,33 @@ Based on the recommendations in `RECOMMENDATIONS.md` and updated requirements in
 **Description:** Add missing BusinessCase UPDATE endpoint and align plan claims with implementation.
 
 ### 🔴 13. Frontend Decimal Precision Loss (CRITICAL)
-**Status:** 🔄 IN PROGRESS (Dec 31, 2025)
+**Status:** ✅ RESOLVED (Dec 31, 2025)
 **Priority:** CRITICAL - Data Integrity Risk
 **Description:** Frontend uses JavaScript `number` type for monetary values, causing precision loss
 
 **Completed Fixes:**
-- ✅ Backend: Changed `BusinessCase.estimated_cost` from `Float` to `Numeric(10, 2)`
-- ✅ Backend: Updated `BusinessCase` schema with `Decimal` type and 2dp rounding validator
-- ✅ Frontend: Updated `business-cases.vue` to use string-based handling
+- ✅ Backend: All monetary fields use `Numeric(10, 2)` (Float → Numeric)
+- ✅ Backend: All monetary schemas use `Decimal` type with 2dp rounding validators
+- ✅ Frontend: All 7 pages updated to use string-based monetary handling:
+  - `budget-items.vue`: budget_amount
+  - `business-cases.vue`: estimated_cost
+  - `line-items.vue`: requested_amount
+  - `purchase-orders.vue`: total_amount
+  - `goods-receipts.vue`: amount
+  - `resources.vue`: cost_per_month
+  - `allocations.vue`: expected_monthly_burn
 
-**Remaining Work:**
-- Update 6 other frontend pages (budget-items, line-items, purchase-orders, goods-receipts, resources, allocations)
+**Changes Made:**
+- TypeScript interfaces: `number` → `string`
+- Form defaults: `0` → `''`
+- Form bindings: `v-model.number` → `v-model`
+- Input types: `type="number"` → `type="text"`
+- formatCurrency(): Updated to parse string inputs
 
-**Files to Fix:**
-- `frontend/pages/budget-items.vue` - BudgetItem interface and form
-- `frontend/pages/line-items.vue` - BusinessCaseLineItem interface
-- `frontend/pages/purchase-orders.vue` - PurchaseOrder interface
-- `frontend/pages/goods-receipts.vue` - GoodsReceipt interface
-- `frontend/pages/resources.vue` - Resource interface
-- `frontend/pages/allocations.vue` - ResourcePOAllocation interface
+**Files Modified:**
+- `backend/app/models.py` - BusinessCase.estimated_cost
+- `backend/app/schemas.py` - Decimal validators
+- `frontend/pages/*.vue` - All 7 entity pages
 
 ---
 
@@ -507,14 +515,14 @@ Based on the recommendations in `RECOMMENDATIONS.md` and updated requirements in
    - `model_dump_json` is v2-only
    - Locations: `backend/app/routers/auth.py:76`, `backend/requirements.txt`
 
-9. **Frontend Decimal Precision Loss** 🔴 PARTIALLY RESOLVED
-    - ✅ Backend FIXED: `BusinessCase.estimated_cost` changed from `Float` to `Numeric(10, 2)`
-    - ✅ Backend FIXED: `BusinessCase` schema uses `Decimal` with 2dp rounding validator
-    - 🔄 Frontend IN PROGRESS: business-cases.vue updated to use string-based handling
-    - ⏳ Remaining: 6 other frontend pages (budget-items, line-items, purchase-orders, goods-receipts, resources, allocations)
-    - Risk of financial discrepancies and rounding errors
-    - Recommendation: Use string-based decimal handling in all frontend forms
-    - Locations: All 7 frontend Vue pages with monetary fields, `backend/app/models.py:108`
+9. **Frontend Decimal Precision Loss** ✅ RESOLVED
+    - ✅ Backend: Changed `BusinessCase.estimated_cost` from `Float` to `Numeric(10, 2)`
+    - ✅ Backend: All monetary schemas use `Decimal` with 2dp rounding validators
+    - ✅ Frontend: All 7 pages updated to use string-based monetary handling
+    - ✅ Updated TypeScript interfaces (number → string)
+    - ✅ Updated form inputs (v-model.number → v-model, type number → text)
+    - ✅ Updated formatCurrency() functions to parse strings
+    - Financial precision preserved end-to-end
 
 ### Design Decisions (Answered)
 

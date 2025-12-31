@@ -13,7 +13,7 @@ interface LineItem {
   title: string
   description?: string
   spend_category: string
-  requested_amount: number
+  requested_amount: string  // Changed from number for Decimal precision
   currency: string
   planned_commit_date?: string
   status?: string
@@ -63,7 +63,7 @@ const form = ref({
   title: '',
   description: '',
   spend_category: 'OPEX',
-  requested_amount: 0,
+  requested_amount: '',
   currency: 'USD',
   planned_commit_date: '',
   status: 'Draft'
@@ -131,7 +131,7 @@ const resetForm = () => {
     title: '',
     description: '',
     spend_category: 'OPEX',
-    requested_amount: 0,
+    requested_amount: '',
     currency: 'USD',
     planned_commit_date: '',
     status: 'Draft'
@@ -229,11 +229,12 @@ const canDelete = () => {
   return currentUser && ['Admin', 'Manager'].includes(currentUser.role)
 }
 
-const formatCurrency = (amount: number, currency: string) => {
+const formatCurrency = (amount: string | number, currency: string) => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency
-  }).format(amount)
+  }).format(num)
 }
 
 const getBusinessCaseTitle = (id: number) => {
@@ -433,7 +434,7 @@ onMounted(async () => {
             <div class="form-group">
               <label>Requested Amount <span class="required">*</span></label>
               <input
-                v-model.number="form.requested_amount"
+                v-model="form.requested_amount"
                 type="number"
                 step="0.01"
                 min="0"
@@ -517,7 +518,7 @@ onMounted(async () => {
             <div class="form-group">
               <label>Requested Amount <span class="required">*</span></label>
               <input
-                v-model.number="form.requested_amount"
+                v-model="form.requested_amount"
                 type="number"
                 step="0.01"
                 min="0"

@@ -52,13 +52,13 @@ const fetchDashboardData = async () => {
     const businessCases = businessCasesData as any[]
 
     // Calculate statistics
-    stats.value.totalBudget = budgetItems.value.reduce((sum, item) => sum + (item.budget_amount || 0), 0)
+    stats.value.totalBudget = budgetItems.value.reduce((sum, item) => sum + (parseFloat(item.budget_amount) || 0), 0)
 
     const openPOs = pos.filter(po => ['Open', 'Approved', 'In Progress'].includes(po.status))
     stats.value.openPOsCount = openPOs.length
-    stats.value.openPOsValue = openPOs.reduce((sum, po) => sum + (po.total_amount || 0), 0)
+    stats.value.openPOsValue = openPOs.reduce((sum, po) => sum + (parseFloat(po.total_amount) || 0), 0)
 
-    stats.value.totalSpend = pos.reduce((sum, po) => sum + (po.total_amount || 0), 0)
+    stats.value.totalSpend = pos.reduce((sum, po) => sum + (parseFloat(po.total_amount) || 0), 0)
 
     stats.value.recentGRsCount = grs.filter(gr => {
       if (!gr.created_at) return false
@@ -96,11 +96,12 @@ onMounted(() => {
 })
 
 // Helpers
-const formatCurrency = (amount: number) => {
+const formatCurrency = (amount: string | number) => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD'
-  }).format(amount)
+  }).format(num)
 }
 
 const formatDate = (dateStr?: string) => {

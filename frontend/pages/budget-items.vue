@@ -11,7 +11,7 @@ interface BudgetItem {
   workday_ref: string
   title: string
   description?: string
-  budget_amount: number
+  budget_amount: string  // Changed from number for Decimal precision
   currency: string
   fiscal_year: number
   owner_group_id: number
@@ -46,7 +46,7 @@ const form = ref({
   workday_ref: '',
   title: '',
   description: '',
-  budget_amount: 0,
+  budget_amount: '',  // Changed from 0 for string-based handling
   currency: 'USD',
   fiscal_year: new Date().getFullYear(),
   owner_group_id: 0
@@ -90,7 +90,7 @@ const resetForm = () => {
     workday_ref: '',
     title: '',
     description: '',
-    budget_amount: 0,
+    budget_amount: '',  // Use empty string for string-based handling
     currency: 'USD',
     fiscal_year: new Date().getFullYear(),
     owner_group_id: groups.value[0]?.id || 0
@@ -183,11 +183,12 @@ const canDelete = () => {
   return currentUser && ['Admin', 'Manager'].includes(currentUser.role)
 }
 
-const formatCurrency = (amount: number, currency: string) => {
+const formatCurrency = (amount: string | number, currency: string) => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency
-  }).format(amount)
+  }).format(num)
 }
 
 onMounted(async () => {
@@ -322,8 +323,8 @@ onMounted(async () => {
             <div class="form-group">
               <label>Budget Amount <span class="required">*</span></label>
               <input
-                v-model.number="form.budget_amount"
-                type="number"
+                v-model="form.budget_amount"
+                type="text"
                 step="0.01"
                 min="0"
                 required
@@ -344,7 +345,7 @@ onMounted(async () => {
             <label>Fiscal Year <span class="required">*</span></label>
             <input
               v-model.number="form.fiscal_year"
-              type="number"
+              type="text"
               min="2020"
               max="2030"
               required
@@ -409,8 +410,8 @@ onMounted(async () => {
             <div class="form-group">
               <label>Budget Amount <span class="required">*</span></label>
               <input
-                v-model.number="form.budget_amount"
-                type="number"
+                v-model="form.budget_amount"
+                type="text"
                 step="0.01"
                 min="0"
                 required
@@ -431,7 +432,7 @@ onMounted(async () => {
             <label>Fiscal Year <span class="required">*</span></label>
             <input
               v-model.number="form.fiscal_year"
-              type="number"
+              type="text"
               min="2020"
               max="2030"
               required

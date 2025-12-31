@@ -9,7 +9,7 @@ interface ResourceAllocation {
   po_id: number
   allocation_start?: string
   allocation_end?: string
-  expected_monthly_burn?: number
+  expected_monthly_burn?: string  // Changed from number for Decimal precision
   owner_group_id: number
   created_by?: number
   updated_by?: number
@@ -52,7 +52,7 @@ const form = ref({
   po_id: 0,
   allocation_start: '',
   allocation_end: '',
-  expected_monthly_burn: 0,
+  expected_monthly_burn: '',
   owner_group_id: 0
 })
 
@@ -136,13 +136,14 @@ const getGroupName = (id: number) => {
   return groups.value.find(g => g.id === id)?.name || 'Unknown'
 }
 
-const formatCurrency = (amount?: number, poId?: number) => {
+const formatCurrency = (amount?: string | number, poId?: number) => {
   if (!amount) return '-'
   const currency = poId ? getPOCurrency(poId) : 'USD'
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency
-  }).format(amount)
+  }).format(num)
 }
 
 const formatDate = (dateStr?: string) => {
@@ -177,7 +178,7 @@ const openCreateModal = () => {
     po_id: 0,
     allocation_start: '',
     allocation_end: '',
-    expected_monthly_burn: 0,
+    expected_monthly_burn: '',
     owner_group_id: 0
   }
   showCreateModal.value = true
@@ -360,7 +361,7 @@ const deleteItem = async (item: ResourceAllocation) => {
           </div>
           <div class="form-group">
             <label>Expected Monthly Burn</label>
-            <input v-model.number="form.expected_monthly_burn" type="number" step="0.01" min="0" />
+            <input v-model="form.expected_monthly_burn" type="text" step="0.01" min="0" />
             <p style="font-size: 0.85rem; color: #666; margin: 0.25rem 0 0 0;">Amount in PO currency</p>
           </div>
           <div class="form-group">
@@ -406,7 +407,7 @@ const deleteItem = async (item: ResourceAllocation) => {
           </div>
           <div class="form-group">
             <label>Expected Monthly Burn</label>
-            <input v-model.number="form.expected_monthly_burn" type="number" step="0.01" min="0" />
+            <input v-model="form.expected_monthly_burn" type="text" step="0.01" min="0" />
             <p style="font-size: 0.85rem; color: #666; margin: 0.25rem 0 0 0;">Amount in PO currency</p>
           </div>
           <div class="form-group">

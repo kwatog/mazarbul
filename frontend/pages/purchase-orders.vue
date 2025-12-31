@@ -12,7 +12,7 @@ interface PurchaseOrder {
   po_type?: string
   start_date?: string
   end_date?: string
-  total_amount: number
+  total_amount: string  // Changed from number for Decimal precision
   currency: string
   spend_category: string
   planned_commit_date?: string
@@ -55,7 +55,7 @@ const form = ref({
   po_type: '',
   start_date: '',
   end_date: '',
-  total_amount: 0,
+  total_amount: '',
   currency: 'USD',
   spend_category: 'CAPEX',
   planned_commit_date: '',
@@ -155,11 +155,12 @@ const getSpendCategoryColor = (category?: string) => {
   return category === 'CAPEX' ? '#8b5cf6' : '#3b82f6'
 }
 
-const formatCurrency = (amount: number, currency: string) => {
+const formatCurrency = (amount: string | number, currency: string) => {
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency || 'USD'
-  }).format(amount)
+  }).format(num)
 }
 
 // Permissions
@@ -193,7 +194,7 @@ const openCreateModal = () => {
     po_type: '',
     start_date: '',
     end_date: '',
-    total_amount: 0,
+    total_amount: '',
     currency: 'USD',
     spend_category: 'CAPEX',
     planned_commit_date: '',
@@ -438,7 +439,7 @@ const deleteItem = async (item: PurchaseOrder) => {
           <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label>Total Amount *</label>
-              <input v-model.number="form.total_amount" type="number" step="0.01" min="0" required />
+              <input v-model="form.total_amount" type="text" step="0.01" min="0" required />
             </div>
             <div class="form-group">
               <label>Currency *</label>
@@ -542,7 +543,7 @@ const deleteItem = async (item: PurchaseOrder) => {
           <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label>Total Amount *</label>
-              <input v-model.number="form.total_amount" type="number" step="0.01" min="0" required />
+              <input v-model="form.total_amount" type="text" step="0.01" min="0" required />
             </div>
             <div class="form-group">
               <label>Currency *</label>

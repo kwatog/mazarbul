@@ -10,7 +10,7 @@ interface Resource {
   role?: string
   start_date?: string
   end_date?: string
-  cost_per_month?: number
+  cost_per_month?: string  // Changed from number for Decimal precision
   owner_group_id: number
   status?: string
   created_by?: number
@@ -39,7 +39,7 @@ const form = ref({
   role: '',
   start_date: '',
   end_date: '',
-  cost_per_month: 0,
+  cost_per_month: '',
   owner_group_id: 0,
   status: 'Active'
 })
@@ -109,12 +109,13 @@ const getStatusColor = (status?: string) => {
   return colors[status || 'Active'] || '#6b7280'
 }
 
-const formatCurrency = (amount?: number) => {
+const formatCurrency = (amount?: string | number) => {
   if (!amount) return '-'
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD'
-  }).format(amount)
+  }).format(num)
 }
 
 const formatDate = (dateStr?: string) => {
@@ -150,7 +151,7 @@ const openCreateModal = () => {
     role: '',
     start_date: '',
     end_date: '',
-    cost_per_month: 0,
+    cost_per_month: '',
     owner_group_id: 0,
     status: 'Active'
   }
@@ -343,7 +344,7 @@ const deleteItem = async (item: Resource) => {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label>Cost per Month (USD)</label>
-              <input v-model.number="form.cost_per_month" type="number" step="0.01" min="0" />
+              <input v-model="form.cost_per_month" type="text" step="0.01" min="0" />
             </div>
             <div class="form-group">
               <label>Status</label>
@@ -402,7 +403,7 @@ const deleteItem = async (item: Resource) => {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="form-group">
               <label>Cost per Month (USD)</label>
-              <input v-model.number="form.cost_per_month" type="number" step="0.01" min="0" />
+              <input v-model="form.cost_per_month" type="text" step="0.01" min="0" />
             </div>
             <div class="form-group">
               <label>Status</label>

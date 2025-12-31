@@ -8,7 +8,7 @@ interface GoodsReceipt {
   po_id: number
   gr_number: string
   gr_date?: string
-  amount: number
+  amount: string  // Changed from number for Decimal precision
   description?: string
   owner_group_id: number
   created_by?: number
@@ -21,7 +21,7 @@ interface PurchaseOrder {
   id: number
   po_number: string
   supplier?: string
-  total_amount: number
+  total_amount: string  // Changed from number for Decimal precision
   currency: string
 }
 
@@ -44,7 +44,7 @@ const form = ref({
   po_id: 0,
   gr_number: '',
   gr_date: '',
-  amount: 0,
+  amount: '',
   description: '',
   owner_group_id: 0
 })
@@ -110,12 +110,13 @@ const getGroupName = (id: number) => {
   return groups.value.find(g => g.id === id)?.name || 'Unknown'
 }
 
-const formatCurrency = (amount: number, poId: number) => {
+const formatCurrency = (amount: string | number, poId: number) => {
   const currency = getPOCurrency(poId)
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency
-  }).format(amount)
+  }).format(num)
 }
 
 const formatDate = (dateStr?: string) => {
@@ -144,7 +145,7 @@ const openCreateModal = () => {
     po_id: 0,
     gr_number: '',
     gr_date: new Date().toISOString().split('T')[0],
-    amount: 0,
+    amount: '',
     description: '',
     owner_group_id: 0
   }
@@ -312,7 +313,7 @@ const deleteItem = async (item: GoodsReceipt) => {
           </div>
           <div class="form-group">
             <label>Amount *</label>
-            <input v-model.number="form.amount" type="number" step="0.01" min="0" required />
+            <input v-model="form.amount" type="text" step="0.01" min="0" required />
           </div>
           <div class="form-group">
             <label>Description</label>
@@ -355,7 +356,7 @@ const deleteItem = async (item: GoodsReceipt) => {
           </div>
           <div class="form-group">
             <label>Amount *</label>
-            <input v-model.number="form.amount" type="number" step="0.01" min="0" required />
+            <input v-model="form.amount" type="text" step="0.01" min="0" required />
           </div>
           <div class="form-group">
             <label>Description</label>

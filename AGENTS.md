@@ -67,12 +67,12 @@ npm run dev
 ```bash
 # Option 1: Using Docker Compose (recommended)
 cd /Users/mmmiciano/ISEngineering/ebrose
-docker-compose -f docker-compose.playwright.yml up --build
+docker compose -f docker-compose.playwright.yml up --build
 
 # Option 2: Using Docker directly (run all test files)
 cd /Users/mmmiciano/ISEngineering/ebrose
 
-# Build and run tests with a single command
+# Build and run tests with a single command (Docker)
 docker run --rm \
   -e CI=true \
   -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:3000 \
@@ -82,11 +82,21 @@ docker run --rm \
   mcr.microsoft.com/playwright:v1.55.0-jammy \
   npx playwright test tests/e2e/
 
+# Or with Podman
+podman run --rm \
+  -e CI=true \
+  -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:3000 \
+  -v $(pwd)/frontend/tests/screenshots:/app/tests/screenshots:z \
+  -v $(pwd)/frontend:/app \
+  -w /app \
+  mcr.microsoft.com/playwright:v1.55.0-jammy \
+  npx playwright test tests/e2e/
+
 # View test report
 open PLAYWRIGHT_TEST_REPORT.html
 ```
 
-**Note:** E2E tests require Docker with Playwright browser support. Start the backend and frontend first, or use the full docker-compose setup.
+**Note:** E2E tests require Docker/Podman with Playwright browser support. Start the backend and frontend first, or use the full docker-compose setup.
 
 ## Authentication
 - Default Admin: `admin` / password set via `ADMIN_PASSWORD` env var (required in production)

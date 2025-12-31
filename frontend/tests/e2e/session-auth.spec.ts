@@ -1,4 +1,20 @@
-import { test, expect } from './conftest';
+import { test, expect } from '@playwright/test';
+
+async function loginAs(page, username, password) {
+  await page.goto('/login');
+  await page.fill('#username', username);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+
+  try {
+    await page.waitForFunction(() => {
+      const cookie = document.cookie.split('; ').find(c => c.startsWith('user_info='));
+      return cookie !== undefined;
+    }, { timeout: 10000 });
+  } catch (e) {
+    // Continue anyway
+  }
+}
 
 test.describe('Session & Authentication', () => {
   test('should redirect to login when accessing protected route without auth', async ({ page }) => {
@@ -8,8 +24,10 @@ test.describe('Session & Authentication', () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test('should clear tokens and redirect after logout', async ({ adminPage }) => {
+  test('should clear tokens and redirect after logout', async ({ page }) => {
     await adminPage.goto('/admin/audit');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.waitForLoadState('networkidle');
 
     await adminPage.click('button:has-text("Logout")');

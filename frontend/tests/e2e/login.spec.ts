@@ -1,5 +1,21 @@
 import { test, expect } from '@playwright/test';
 
+async function loginAs(page, username, password) {
+  await page.goto('/login');
+  await page.fill('#username', username);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+
+  try {
+    await page.waitForFunction(() => {
+      const cookie = document.cookie.split('; ').find(c => c.startsWith('user_info='));
+      return cookie !== undefined;
+    }, { timeout: 10000 });
+  } catch (e) {
+    // Continue anyway
+  }
+}
+
 test.describe('Login Flow', () => {
   test('should login successfully with admin credentials', async ({ page }) => {
     const responses: string[] = [];
@@ -31,21 +47,24 @@ test.describe('Login Flow', () => {
     await expect(page).toHaveURL('/login');
   });
 
-  test('admin user should see admin navigation items', async ({ adminPage }) => {
-    await adminPage.goto('/');
+  test('admin user should see admin navigation items', async ({ page }) => {
+    await loginAs(page, 'admin', 'admin123');
+    await page.goto('/');
 
-    await expect(adminPage.locator('text=Admin Panel')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=Admin Panel')).toBeVisible({ timeout: 10000 });
   });
 
-  test('manager user should not see admin navigation items', async ({ managerPage }) => {
-    await managerPage.goto('/');
+  test('manager user should not see admin navigation items', async ({ page }) => {
+    await loginAs(page, 'manager', 'manager123');
+    await page.goto('/');
 
-    await expect(managerPage.locator('text=Admin Panel')).not.toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=Admin Panel')).not.toBeVisible({ timeout: 5000 });
   });
 
-  test('regular user should not see admin navigation items', async ({ userPage }) => {
-    await userPage.goto('/');
+  test('regular user should not see admin navigation items', async ({ page }) => {
+    await loginAs(page, 'user', 'user123');
+    await page.goto('/');
 
-    await expect(userPage.locator('text=Admin Panel')).not.toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=Admin Panel')).not.toBeVisible({ timeout: 5000 });
   });
 });

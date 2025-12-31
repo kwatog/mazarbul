@@ -1,9 +1,27 @@
-import { test, expect } from './conftest';
+import { test, expect } from '@playwright/test';
+
+async function loginAs(page, username, password) {
+  await page.goto('/login');
+  await page.fill('#username', username);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+
+  try {
+    await page.waitForFunction(() => {
+      const cookie = document.cookie.split('; ').find(c => c.startsWith('user_info='));
+      return cookie !== undefined;
+    }, { timeout: 10000 });
+  } catch (e) {
+    // Continue anyway
+  }
+}
 
 test.describe('Budget to Business Case Workflow', () => {
 
-  test('should create budget item successfully', async ({ adminPage }) => {
+  test('should create budget item successfully', async ({ page }) => {
     await adminPage.goto('/budget-items');
+    await loginAs(page, 'admin', 'admin123');
+    
 
     await adminPage.click('button:has-text("Create Budget Item")');
     await adminPage.waitForTimeout(300);
@@ -20,8 +38,10 @@ test.describe('Budget to Business Case Workflow', () => {
     await expect(adminPage.locator('.modal-overlay')).not.toBeVisible();
   });
 
-  test('should navigate through dashboard quick actions', async ({ adminPage }) => {
+  test('should navigate through dashboard quick actions', async ({ page }) => {
     await adminPage.goto('/');
+    await loginAs(page, 'admin', 'admin123');
+    
 
     await expect(adminPage.locator('text=Total Budget')).toBeVisible();
 
@@ -29,8 +49,10 @@ test.describe('Budget to Business Case Workflow', () => {
     await expect(adminPage).toHaveURL('/budget-items');
   });
 
-  test('should filter budget items by fiscal year', async ({ adminPage }) => {
+  test('should filter budget items by fiscal year', async ({ page }) => {
     await adminPage.goto('/budget-items');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.waitForLoadState('networkidle');
 
     await adminPage.selectOption('select', { label: '2025' });

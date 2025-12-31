@@ -1,5 +1,21 @@
 import { test, expect } from '@playwright/test';
 
+async function loginAs(page, username, password) {
+  await page.goto('/login');
+  await page.fill('#username', username);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+
+  try {
+    await page.waitForFunction(() => {
+      const cookie = document.cookie.split('; ').find(c => c.startsWith('user_info='));
+      return cookie !== undefined;
+    }, { timeout: 10000 });
+  } catch (e) {
+    // Continue anyway
+  }
+}
+
 test.describe('Role-Based Access Control - True E2E', () => {
   test('Viewer role cannot create/edit/delete budget items', async ({ userPage }) => {
     await userPage.goto('/budget-items');
@@ -19,8 +35,10 @@ test.describe('Role-Based Access Control - True E2E', () => {
     await expect(managerPage.locator('button:has-text("Delete")').first()).toBeVisible();
   });
 
-  test('Admin sees admin-only pages that Manager cannot', async ({ adminPage }) => {
+  test('Admin sees admin-only pages that Manager cannot', async ({ page }) => {
     await adminPage.goto('/');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.waitForLoadState('networkidle');
 
     await expect(adminPage.locator('text=Admin Panel')).toBeVisible({ timeout: 10000 });

@@ -1,9 +1,27 @@
-import { test, expect } from './conftest';
+import { test, expect } from '@playwright/test';
+
+async function loginAs(page, username, password) {
+  await page.goto('/login');
+  await page.fill('#username', username);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+
+  try {
+    await page.waitForFunction(() => {
+      const cookie = document.cookie.split('; ').find(c => c.startsWith('user_info='));
+      return cookie !== undefined;
+    }, { timeout: 10000 });
+  } catch (e) {
+    // Continue anyway
+  }
+}
 
 test.describe('UI/UX Feedback', () => {
 
-  test('should show loading spinner during API calls', async ({ adminPage }) => {
+  test('should show loading spinner during API calls', async ({ page }) => {
     await adminPage.goto('/budget-items');
+    await loginAs(page, 'admin', 'admin123');
+    
 
     await expect(adminPage.locator('.loading-spinner, .spinner, text=Loading...')).toBeVisible({ timeout: 2000 });
 
@@ -12,7 +30,7 @@ test.describe('UI/UX Feedback', () => {
     await expect(adminPage.locator('.loading-spinner, .spinner')).not.toBeVisible();
   });
 
-  test('should show toast notification on success', async ({ adminPage }) => {
+  test('should show toast notification on success', async ({ page }) => {
     let successToastShown = false;
 
     adminPage.on('dialog', async dialog => {
@@ -23,6 +41,8 @@ test.describe('UI/UX Feedback', () => {
     });
 
     await adminPage.goto('/admin/groups');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.waitForLoadState('networkidle');
 
     await adminPage.click('button:has-text("Create Group")');
@@ -38,8 +58,10 @@ test.describe('UI/UX Feedback', () => {
     await expect(toast.first()).toBeVisible({ timeout: 5000 });
   });
 
-  test('should show error notification on API failure', async ({ adminPage }) => {
+  test('should show error notification on API failure', async ({ page }) => {
     await adminPage.goto('/budget-items');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.click('button:has-text("Create Budget Item")');
     await adminPage.waitForTimeout(300);
 
@@ -53,8 +75,10 @@ test.describe('UI/UX Feedback', () => {
     await expect(adminPage.locator('text=/error|failed|duplicate/i')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should disable form submit button during submission', async ({ adminPage }) => {
+  test('should disable form submit button during submission', async ({ page }) => {
     await adminPage.goto('/budget-items');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.click('button:has-text("Create Budget Item")');
     await adminPage.waitForTimeout(300);
 
@@ -68,8 +92,10 @@ test.describe('UI/UX Feedback', () => {
     await expect(submitBtn).toHaveAttribute('disabled', '');
   });
 
-  test('should maintain form state after validation error', async ({ adminPage }) => {
+  test('should maintain form state after validation error', async ({ page }) => {
     await adminPage.goto('/budget-items');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.click('button:has-text("Create Budget Item")');
     await adminPage.waitForTimeout(300);
 

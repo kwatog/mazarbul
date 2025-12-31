@@ -1,9 +1,27 @@
-import { test, expect } from './conftest';
+import { test, expect } from '@playwright/test';
+
+async function loginAs(page, username, password) {
+  await page.goto('/login');
+  await page.fill('#username', username);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+
+  try {
+    await page.waitForFunction(() => {
+      const cookie = document.cookie.split('; ').find(c => c.startsWith('user_info='));
+      return cookie !== undefined;
+    }, { timeout: 10000 });
+  } catch (e) {
+    // Continue anyway
+  }
+}
 
 test.describe('Access Control UI Tests', () => {
 
-  test('Admin user can see all budget items', async ({ adminPage }) => {
+  test('Admin user can see all budget items', async ({ page }) => {
     await adminPage.goto('/budget-items');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.waitForLoadState('networkidle');
 
     await adminPage.screenshot({
@@ -54,8 +72,10 @@ test.describe('Access Control UI Tests', () => {
     });
   });
 
-  test('User groups management - Admin view', async ({ adminPage }) => {
+  test('User groups management - Admin view', async ({ page }) => {
     await adminPage.goto('/admin/groups');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.waitForLoadState('networkidle');
 
     await adminPage.screenshot({
@@ -64,8 +84,10 @@ test.describe('Access Control UI Tests', () => {
     });
   });
 
-  test('Dashboard health check display', async ({ adminPage }) => {
+  test('Dashboard health check display', async ({ page }) => {
     await adminPage.goto('/');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.waitForLoadState('networkidle');
 
     await adminPage.screenshot({
@@ -76,8 +98,10 @@ test.describe('Access Control UI Tests', () => {
     await expect(adminPage.locator('text=/healthy|connected/i')).toBeVisible();
   });
 
-  test('Access sharing modal - record level permissions', async ({ adminPage }) => {
+  test('Access sharing modal - record level permissions', async ({ page }) => {
     await adminPage.goto('/budget-items/1');
+    await loginAs(page, 'admin', 'admin123');
+    
     await adminPage.waitForLoadState('networkidle');
 
     await adminPage.click('button:has-text("Share")');

@@ -65,22 +65,28 @@ npm run dev
 
 ### Frontend E2E Tests
 ```bash
-# Playwright E2E tests MUST run inside Docker container
-# This ensures consistent browser environment and dependencies
-
+# Option 1: Using Docker Compose (recommended)
 cd /Users/mmmiciano/ISEngineering/ebrose
-
-# Start Playwright test environment
 docker-compose -f docker-compose.playwright.yml up --build
 
-# Or run tests directly with the pre-built test container
-docker-compose -f docker-compose.playwright.yml run playwright-test
+# Option 2: Using Docker directly (run all test files)
+cd /Users/mmmiciano/ISEngineering/ebrose
 
-# View test report after execution
+# Build and run tests with a single command
+docker run --rm \
+  -e CI=true \
+  -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:3000 \
+  -v $(pwd)/frontend/tests/screenshots:/app/tests/screenshots \
+  -v $(pwd)/frontend:/app \
+  -w /app \
+  mcr.microsoft.com/playwright:v1.55.0-jammy \
+  npx playwright test tests/e2e/
+
+# View test report
 open PLAYWRIGHT_TEST_REPORT.html
 ```
 
-**Note:** E2E tests require Docker and cannot run directly with `npm run test:e2e` due to native browser dependencies. Use the Docker Compose setup for consistent testing.
+**Note:** E2E tests require Docker with Playwright browser support. Start the backend and frontend first, or use the full docker-compose setup.
 
 ## Authentication
 - Default Admin: `admin` / password set via `ADMIN_PASSWORD` env var (required in production)

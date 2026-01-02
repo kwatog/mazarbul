@@ -61,6 +61,16 @@ test.describe('Application Screenshots', () => {
     await page.screenshot({ path: 'screenshots/05-purchase-orders.png', fullPage: true });
   });
 
+  test('05b-purchase-orders-create-modal', async ({ page }) => {
+    await loginAs(page, 'admin', 'admin123');
+    await page.goto('/purchase-orders');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    await page.click('button:has-text("+ Create PO")');
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: 'screenshots/05b-purchase-orders-create-modal.png', fullPage: true });
+  });
+
   test('06-wbs', async ({ page }) => {
     await loginAs(page, 'admin', 'admin123');
     await page.goto('/wbs');
@@ -69,12 +79,32 @@ test.describe('Application Screenshots', () => {
     await page.screenshot({ path: 'screenshots/06-wbs.png', fullPage: true });
   });
 
+  test('06b-wbs-create-modal', async ({ page }) => {
+    await loginAs(page, 'admin', 'admin123');
+    await page.goto('/wbs');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    await page.click('button:has-text("+ Create WBS")');
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: 'screenshots/06b-wbs-create-modal.png', fullPage: true });
+  });
+
   test('07-assets', async ({ page }) => {
     await loginAs(page, 'admin', 'admin123');
     await page.goto('/assets');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
     await page.screenshot({ path: 'screenshots/07-assets.png', fullPage: true });
+  });
+
+  test('07b-assets-create-modal', async ({ page }) => {
+    await loginAs(page, 'admin', 'admin123');
+    await page.goto('/assets');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    await page.click('button:has-text("+ Create Asset")');
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: 'screenshots/07b-assets-create-modal.png', fullPage: true });
   });
 
   test('08-admin-groups', async ({ page }) => {
@@ -99,5 +129,23 @@ test.describe('Application Screenshots', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
     await page.screenshot({ path: 'screenshots/10-business-cases.png', fullPage: true });
+  });
+
+  test('11-goods-receipts', async ({ page }) => {
+    await loginAs(page, 'admin', 'admin123');
+    await page.goto('/goods-receipts');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: 'screenshots/11-goods-receipts.png', fullPage: true });
+  });
+
+  test('11b-goods-receipts-create-modal', async ({ page }) => {
+    await loginAs(page, 'admin', 'admin123');
+    await page.goto('/goods-receipts');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+    await page.click('button:has-text("+ Create GR")');
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: 'screenshots/11b-goods-receipts-create-modal.png', fullPage: true });
   });
 });

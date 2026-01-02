@@ -225,3 +225,153 @@ def test_audit_log_created_on_update(client, admin_user, admin_token, test_group
     import json
     old_values = json.loads(audit_logs[0].old_values) if audit_logs[0].old_values else {}
     assert "title" in old_values or audit_logs[0].old_values is not None
+
+
+def test_record_access_prevents_granting_write_to_viewer(client, admin_user, admin_token, db_session):
+    """Test that Write/Full access cannot be granted to Viewer role users."""
+    from app.models import BudgetItem, User, RecordAccess
+    from app.auth import get_password_hash
+
+    # Create a Viewer user
+    viewer_user = User(
+        username="viewer_test",
+        email="viewer@test.com",
+        full_name="Test Viewer",
+        role="Viewer",
+        is_active=True,
+        hashed_password=get_password_hash("password")
+    )
+    db_session.add(viewer_user)
+    db_session.commit()
+    db_session.refresh(viewer_user)
+
+    # Create a budget item
+    budget_item = BudgetItem(
+        workday_ref="WD-VIEWER-001",
+        title="Viewer Test Budget",
+        budget_amount=10000,
+        currency="USD",
+        fiscal_year=2025,
+        owner_group_id=1,  # Use a default group ID
+        created_by=admin_user.id,
+        created_at=datetime.utcnow().isoformat()
+    )
+    db_session.add(budget_item)
+    db_session.commit()
+    db_session.refresh(budget_item)
+
+    # Try to grant Write access to Viewer - should fail
+    response = client.post(
+        "/record-access/",
+        json={
+            "record_type": "BudgetItem",
+            "record_id": budget_item.id,
+            "user_id": viewer_user.id,
+            "access_level": "Write"
+        },
+        cookies={"access_token": admin_token}
+    )
+    assert response.status_code == 400
+    assert "Cannot grant Write or Full access to Viewers" in response.json()["detail"]
+
+    # Try to grant Full access to Viewer - should fail
+    response = client.post(
+        "/record-access/",
+        json={
+            "record_type": "BudgetItem",
+            "record_id": budget_item.id,
+            "user_id": viewer_user.id,
+            "access_level": "Full"
+        },
+        cookies={"access_token": admin_token}
+    )
+    assert response.status_code == 400
+    assert "Cannot grant Write or Full access to Viewers" in response.json()["detail"]
+
+    # Granting Read access to Viewer should succeed
+    response = client.post(
+        "/record-access/",
+        json={
+            "record_type": "BudgetItem",
+            "record_id": budget_item.id,
+            "user_id": viewer_user.id,
+            "access_level": "Read"
+        },
+        cookies={"access_token": admin_token}
+    )
+    assert response.status_code == 200
+
+
+def test_business_case_creator_audit_access_only(client, regular_user, user_token, db_session):
+    """Test that BusinessCase creator has Read-only access (audit), not Write access."""
+    from app.models import BusinessCase
+
+    # Create BC as regular user
+    bc = BusinessCase(
+        title="Creator Audit Test BC",
+        description="Testing creator audit access only",
+        status="Draft",
+        created_by=regular_user.id,
+        created_at=datetime.utcnow().isoformat()
+    )
+    db_session.add(bc)
+    db_session.commit()
+    db_session.refresh(bc)
+
+    # Creator should be able to READ the BC
+    response = client.get(
+        f"/business-cases/{bc.id}",
+        cookies={"access_token": user_token}
+    )
+    assert response.status_code == 200
+    assert response.json()["title"] == "Creator Audit Test BC"
+
+    # Creator should NOT be able to WRITE to the BC (no line-item access)
+    response = client.put(
+        f"/business-cases/{bc.id}",
+        json={"description": "Should fail"},
+        cookies={"access_token": user_token}
+    )
+    assert response.status_code == 403
+
+
+def test_business_case_lead_group_write_enforcement(client, admin_user, admin_token, regular_user, user_token, db_session, test_group):
+    """Test that lead_group_id is enforced for BusinessCase Write access."""
+    from app.models import BusinessCase, UserGroupMembership
+
+    # Create BC with lead_group_id set to test_group
+    bc = BusinessCase(
+        title="Lead Group Test BC",
+        description="Testing lead_group_id enforcement",
+        lead_group_id=test_group.id,
+        status="Draft",
+        created_by=admin_user.id,
+        created_at=datetime.utcnow().isoformat()
+    )
+    db_session.add(bc)
+    db_session.commit()
+    db_session.refresh(bc)
+
+    # regular_user should NOT be able to write (not a member of lead_group yet)
+    response = client.put(
+        f"/business-cases/{bc.id}",
+        json={"description": "Should fail"},
+        cookies={"access_token": user_token}
+    )
+    assert response.status_code == 403
+
+    # Add regular_user to the lead_group
+    membership = UserGroupMembership(user_id=regular_user.id, group_id=test_group.id)
+    db_session.add(membership)
+    db_session.commit()
+
+    # Need to refresh the BC to clear any cached state
+    db_session.refresh(bc)
+
+    # Now regular_user should be able to write
+    response = client.put(
+        f"/business-cases/{bc.id}",
+        json={"description": "Should succeed now"},
+        cookies={"access_token": user_token}
+    )
+    assert response.status_code == 200

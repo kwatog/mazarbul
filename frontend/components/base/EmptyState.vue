@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import { type Component, h } from 'vue'
+import { InboxIcon } from '@heroicons/vue/24/outline'
+
 withDefaults(defineProps<{
   title: string
   description?: string
   actionText?: string
+  icon?: Component
 }>(), {
-  description: ''
+  description: '',
+  icon: InboxIcon
 })
 
 const emit = defineEmits<{
@@ -16,7 +21,7 @@ const emit = defineEmits<{
   <div class="empty-state">
     <div class="empty-state-icon">
       <slot name="icon">
-        <span class="icon-placeholder">📭</span>
+        <component :is="icon" class="empty-state-svg" />
       </slot>
     </div>
     
@@ -48,9 +53,10 @@ const emit = defineEmits<{
   margin-bottom: var(--spacing-4);
 }
 
-.icon-placeholder {
-  font-size: 4rem;
-  opacity: 0.4;
+.empty-state-svg {
+  width: 64px;
+  height: 64px;
+  color: var(--color-gray-300);
 }
 
 .empty-state-title {

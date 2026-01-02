@@ -112,9 +112,9 @@ const getUtilizationPercentage = computed(() => {
 
 const getUtilizationColor = computed(() => {
   const pct = getUtilizationPercentage.value
-  if (pct < 50) return '#10b981' // green
-  if (pct < 80) return '#f59e0b' // orange
-  return '#ef4444' // red
+  if (pct < 50) return 'var(--color-success)'
+  if (pct < 80) return 'var(--color-warning)'
+  return 'var(--color-error)'
 })
 
 const isManager = computed(() => {
@@ -123,244 +123,341 @@ const isManager = computed(() => {
 </script>
 
 <template>
-  <div class="page-container">
+  <div class="main-container">
     <div class="page-header">
       <div>
-        <h1>Dashboard</h1>
-        <p style="color: #666; font-size: 0.95rem; margin-top: 0.25rem;">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">
           Welcome back, <strong>{{ user?.username }}</strong> ({{ user?.role }})
         </p>
       </div>
     </div>
 
-    <div v-if="loading" style="text-align: center; padding: 3rem; color: #666;">
-      Loading dashboard data...
+    <div v-if="loading" class="loading-container">
+      <LoadingSpinner size="lg" label="Loading dashboard data..." />
+      <p class="text-muted">Loading dashboard data...</p>
     </div>
 
-    <div v-else-if="error" style="padding: 2rem; background: #fee; border-radius: 8px; color: #c00;">
-      {{ error }}
+    <div v-else-if="error" class="error-container">
+      <p class="error-text">{{ error }}</p>
     </div>
 
     <div v-else>
       <!-- Statistics Cards -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+      <div class="stats-grid">
         <!-- Budget Overview -->
-        <div class="stat-card">
-          <div class="stat-icon" style="background-color: #e0e7ff;">
-            <span style="font-size: 1.5rem;">💰</span>
-          </div>
-          <div class="stat-content">
-            <div class="stat-label">Total Budget</div>
-            <div class="stat-value">{{ formatCurrency(stats.totalBudget) }}</div>
-            <div class="stat-meta">{{ budgetItems.length }} budget items</div>
-          </div>
-        </div>
-
-        <!-- Spend Overview -->
-        <div class="stat-card">
-          <div class="stat-icon" style="background-color: #fef3c7;">
-            <span style="font-size: 1.5rem;">📊</span>
-          </div>
-          <div class="stat-content">
-            <div class="stat-label">Total Spend</div>
-            <div class="stat-value">{{ formatCurrency(stats.totalSpend) }}</div>
-            <div class="stat-meta" :style="{ color: getUtilizationColor }">
-              {{ getUtilizationPercentage }}% of budget
+        <BaseCard padding="md" class="stat-card">
+          <div class="stat-card-content">
+            <div class="stat-icon stat-icon-primary">
+              <span>💰</span>
+            </div>
+            <div class="stat-details">
+              <div class="stat-label">Total Budget</div>
+              <div class="stat-value">{{ formatCurrency(stats.totalBudget) }}</div>
+              <div class="stat-meta">{{ budgetItems.length }} budget items</div>
             </div>
           </div>
-        </div>
+        </BaseCard>
+
+        <!-- Spend Overview -->
+        <BaseCard padding="md" class="stat-card">
+          <div class="stat-card-content">
+            <div class="stat-icon stat-icon-warning">
+              <span>📊</span>
+            </div>
+            <div class="stat-details">
+              <div class="stat-label">Total Spend</div>
+              <div class="stat-value">{{ formatCurrency(stats.totalSpend) }}</div>
+              <div class="stat-meta" :style="{ color: getUtilizationColor }">
+                {{ getUtilizationPercentage }}% of budget
+              </div>
+            </div>
+          </div>
+        </BaseCard>
 
         <!-- Open POs -->
-        <div class="stat-card">
-          <div class="stat-icon" style="background-color: #dbeafe;">
-            <span style="font-size: 1.5rem;">📄</span>
+        <BaseCard padding="md" class="stat-card">
+          <div class="stat-card-content">
+            <div class="stat-icon stat-icon-info">
+              <span>📄</span>
+            </div>
+            <div class="stat-details">
+              <div class="stat-label">Open Purchase Orders</div>
+              <div class="stat-value">{{ stats.openPOsCount }}</div>
+              <div class="stat-meta">{{ formatCurrency(stats.openPOsValue) }} value</div>
+            </div>
           </div>
-          <div class="stat-content">
-            <div class="stat-label">Open Purchase Orders</div>
-            <div class="stat-value">{{ stats.openPOsCount }}</div>
-            <div class="stat-meta">{{ formatCurrency(stats.openPOsValue) }} value</div>
-          </div>
-        </div>
+        </BaseCard>
 
         <!-- Active Resources -->
-        <div class="stat-card">
-          <div class="stat-icon" style="background-color: #d1fae5;">
-            <span style="font-size: 1.5rem;">👥</span>
+        <BaseCard padding="md" class="stat-card">
+          <div class="stat-card-content">
+            <div class="stat-icon stat-icon-success">
+              <span>👥</span>
+            </div>
+            <div class="stat-details">
+              <div class="stat-label">Active Resources</div>
+              <div class="stat-value">{{ stats.activeResourcesCount }}</div>
+              <div class="stat-meta">{{ stats.recentGRsCount }} GRs this month</div>
+            </div>
           </div>
-          <div class="stat-content">
-            <div class="stat-label">Active Resources</div>
-            <div class="stat-value">{{ stats.activeResourcesCount }}</div>
-            <div class="stat-meta">{{ stats.recentGRsCount }} GRs this month</div>
-          </div>
-        </div>
+        </BaseCard>
 
         <!-- Pending Business Cases -->
-        <div class="stat-card" v-if="isManager">
-          <div class="stat-icon" style="background-color: #fce7f3;">
-            <span style="font-size: 1.5rem;">📋</span>
+        <BaseCard v-if="isManager" padding="md" class="stat-card">
+          <div class="stat-card-content">
+            <div class="stat-icon stat-icon-secondary">
+              <span>📋</span>
+            </div>
+            <div class="stat-details">
+              <div class="stat-label">Pending Business Cases</div>
+              <div class="stat-value">{{ stats.pendingBusinessCases }}</div>
+              <div class="stat-meta">Awaiting review/approval</div>
+            </div>
           </div>
-          <div class="stat-content">
-            <div class="stat-label">Pending Business Cases</div>
-            <div class="stat-value">{{ stats.pendingBusinessCases }}</div>
-            <div class="stat-meta">Awaiting review/approval</div>
-          </div>
-        </div>
+        </BaseCard>
       </div>
 
       <!-- Budget Utilization Bar -->
-      <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem;">
-        <h2 style="font-size: 1.1rem; margin: 0 0 1rem 0; color: #333;">Budget Utilization</h2>
-        <div style="background: #f3f4f6; height: 40px; border-radius: 8px; overflow: hidden; position: relative;">
-          <div
-            :style="{
-              width: getUtilizationPercentage + '%',
-              height: '100%',
-              backgroundColor: getUtilizationColor,
-              transition: 'width 0.5s ease'
-            }"
-          ></div>
-          <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #333;">
-            {{ formatCurrency(stats.totalSpend) }} / {{ formatCurrency(stats.totalBudget) }} ({{ getUtilizationPercentage }}%)
+      <BaseCard title="Budget Utilization" padding="md">
+        <div class="utilization-bar-container">
+          <div class="utilization-bar-bg">
+            <div
+              class="utilization-bar-fill"
+              :style="{
+                width: getUtilizationPercentage + '%',
+                backgroundColor: getUtilizationColor
+              }"
+            ></div>
+            <div class="utilization-bar-label">
+              {{ formatCurrency(stats.totalSpend) }} / {{ formatCurrency(stats.totalBudget) }} ({{ getUtilizationPercentage }}%)
+            </div>
           </div>
         </div>
-      </div>
+      </BaseCard>
 
       <!-- Quick Actions -->
-      <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem;">
-        <h2 style="font-size: 1.1rem; margin: 0 0 1rem 0; color: #333;">Quick Actions</h2>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+      <BaseCard title="Quick Actions" padding="md">
+        <div class="quick-actions-grid">
           <NuxtLink to="/budget-items" class="quick-action-btn">
-            <span style="font-size: 1.5rem; margin-bottom: 0.5rem;">💰</span>
+            <span class="quick-action-icon">💰</span>
             <span>Manage Budgets</span>
           </NuxtLink>
           <NuxtLink to="/business-cases" class="quick-action-btn">
-            <span style="font-size: 1.5rem; margin-bottom: 0.5rem;">📋</span>
+            <span class="quick-action-icon">📋</span>
             <span>Business Cases</span>
           </NuxtLink>
           <NuxtLink to="/purchase-orders" class="quick-action-btn">
-            <span style="font-size: 1.5rem; margin-bottom: 0.5rem;">📄</span>
+            <span class="quick-action-icon">📄</span>
             <span>Purchase Orders</span>
           </NuxtLink>
           <NuxtLink to="/goods-receipts" class="quick-action-btn">
-            <span style="font-size: 1.5rem; margin-bottom: 0.5rem;">📦</span>
+            <span class="quick-action-icon">📦</span>
             <span>Goods Receipts</span>
           </NuxtLink>
-          <NuxtLink to="/resources" class="quick-action-btn" v-if="isManager">
-            <span style="font-size: 1.5rem; margin-bottom: 0.5rem;">👥</span>
+          <NuxtLink v-if="isManager" to="/resources" class="quick-action-btn">
+            <span class="quick-action-icon">👥</span>
             <span>Resources</span>
           </NuxtLink>
-          <NuxtLink to="/admin/audit" class="quick-action-btn" v-if="isManager">
-            <span style="font-size: 1.5rem; margin-bottom: 0.5rem;">📊</span>
+          <NuxtLink v-if="isManager" to="/admin/audit" class="quick-action-btn">
+            <span class="quick-action-icon">📊</span>
             <span>Audit Logs</span>
           </NuxtLink>
         </div>
-      </div>
+      </BaseCard>
 
       <!-- Recent Activity -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+      <div class="recent-activity-grid">
         <!-- Recent Purchase Orders -->
-        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <h2 style="font-size: 1.1rem; margin: 0 0 1rem 0; color: #333;">Recent Purchase Orders</h2>
-          <div v-if="recentPurchaseOrders.length === 0" style="color: #999; font-size: 0.9rem;">
-            No purchase orders yet
-          </div>
-          <div v-else style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <BaseCard title="Recent Purchase Orders" padding="md">
+          <EmptyState
+            v-if="recentPurchaseOrders.length === 0"
+            title="No purchase orders yet"
+            description="Purchase orders will appear here once created"
+          />
+          <div v-else class="recent-items-list">
             <div
               v-for="po in recentPurchaseOrders"
               :key="po.id"
-              style="padding: 0.75rem; background: #f9fafb; border-radius: 6px; border-left: 3px solid #3b82f6;"
+              class="recent-item recent-item-info"
             >
-              <div style="display: flex; justify-content: space-between; align-items: start;">
-                <div style="flex: 1;">
-                  <div style="font-weight: 600; color: #333; margin-bottom: 0.25rem;">{{ po.po_number }}</div>
-                  <div style="font-size: 0.85rem; color: #666;">{{ po.supplier || 'No supplier' }}</div>
-                </div>
-                <div style="text-align: right;">
-                  <div style="font-weight: 600; color: #3b82f6;">{{ formatCurrency(po.total_amount) }}</div>
-                  <div style="font-size: 0.8rem; color: #999;">{{ formatDate(po.created_at) }}</div>
-                </div>
+              <div class="recent-item-content">
+                <div class="recent-item-title">{{ po.po_number }}</div>
+                <div class="recent-item-subtitle">{{ po.supplier || 'No supplier' }}</div>
+              </div>
+              <div class="recent-item-meta">
+                <div class="recent-item-amount recent-item-amount-info">{{ formatCurrency(po.total_amount) }}</div>
+                <div class="recent-item-date">{{ formatDate(po.created_at) }}</div>
               </div>
             </div>
           </div>
-          <NuxtLink to="/purchase-orders" style="display: block; margin-top: 1rem; color: #3b82f6; font-size: 0.9rem; text-decoration: none;">
-            View all →
-          </NuxtLink>
-        </div>
+          <template #footer>
+            <NuxtLink to="/purchase-orders" class="view-all-link">
+              View all →
+            </NuxtLink>
+          </template>
+        </BaseCard>
 
         <!-- Recent Goods Receipts -->
-        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <h2 style="font-size: 1.1rem; margin: 0 0 1rem 0; color: #333;">Recent Goods Receipts</h2>
-          <div v-if="recentGoodsReceipts.length === 0" style="color: #999; font-size: 0.9rem;">
-            No goods receipts yet
-          </div>
-          <div v-else style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <BaseCard title="Recent Goods Receipts" padding="md">
+          <EmptyState
+            v-if="recentGoodsReceipts.length === 0"
+            title="No goods receipts yet"
+            description="Goods receipts will appear here once created"
+          />
+          <div v-else class="recent-items-list">
             <div
               v-for="gr in recentGoodsReceipts"
               :key="gr.id"
-              style="padding: 0.75rem; background: #f9fafb; border-radius: 6px; border-left: 3px solid #10b981;"
+              class="recent-item recent-item-success"
             >
-              <div style="display: flex; justify-content: space-between; align-items: start;">
-                <div style="flex: 1;">
-                  <div style="font-weight: 600; color: #333; margin-bottom: 0.25rem;">{{ gr.gr_number }}</div>
-                  <div style="font-size: 0.85rem; color: #666;">{{ gr.description || 'No description' }}</div>
-                </div>
-                <div style="text-align: right;">
-                  <div style="font-weight: 600; color: #10b981;">{{ formatCurrency(gr.amount) }}</div>
-                  <div style="font-size: 0.8rem; color: #999;">{{ formatDate(gr.created_at) }}</div>
-                </div>
+              <div class="recent-item-content">
+                <div class="recent-item-title">{{ gr.gr_number }}</div>
+                <div class="recent-item-subtitle">{{ gr.description || 'No description' }}</div>
+              </div>
+              <div class="recent-item-meta">
+                <div class="recent-item-amount recent-item-amount-success">{{ formatCurrency(gr.amount) }}</div>
+                <div class="recent-item-date">{{ formatDate(gr.created_at) }}</div>
               </div>
             </div>
           </div>
-          <NuxtLink to="/goods-receipts" style="display: block; margin-top: 1rem; color: #10b981; font-size: 0.9rem; text-decoration: none;">
-            View all →
-          </NuxtLink>
-        </div>
+          <template #footer>
+            <NuxtLink to="/goods-receipts" class="view-all-link">
+              View all →
+            </NuxtLink>
+          </template>
+        </BaseCard>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.stat-card {
-  background: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.loading-container {
   display: flex;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-12);
+  gap: var(--spacing-4);
+}
+
+.error-container {
+  padding: var(--spacing-6);
+  background: #fee;
+  border-radius: var(--radius-lg);
+}
+
+.error-text {
+  color: var(--color-error);
+  margin: 0;
+}
+
+/* Statistics Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+}
+
+.stat-card-content {
+  display: flex;
+  gap: var(--spacing-4);
   align-items: center;
 }
 
 .stat-icon {
   width: 60px;
   height: 60px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  font-size: var(--text-2xl);
 }
 
-.stat-content {
+.stat-icon-primary {
+  background: #e0e7ff;
+}
+
+.stat-icon-warning {
+  background: #fef3c7;
+}
+
+.stat-icon-info {
+  background: #dbeafe;
+}
+
+.stat-icon-success {
+  background: #d1fae5;
+}
+
+.stat-icon-secondary {
+  background: #fce7f3;
+}
+
+.stat-details {
   flex: 1;
 }
 
 .stat-label {
-  font-size: 0.85rem;
-  color: #666;
-  margin-bottom: 0.25rem;
+  font-size: var(--text-sm);
+  color: var(--color-gray-600);
+  margin-bottom: var(--spacing-1);
 }
 
 .stat-value {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
-  color: #333;
-  margin-bottom: 0.25rem;
+  color: var(--color-gray-900);
+  margin-bottom: var(--spacing-1);
 }
 
 .stat-meta {
-  font-size: 0.8rem;
-  color: #999;
+  font-size: var(--text-xs);
+  color: var(--color-gray-500);
+}
+
+/* Utilization Bar */
+.utilization-bar-container {
+  margin-top: var(--spacing-4);
+}
+
+.utilization-bar-bg {
+  background: var(--color-gray-100);
+  height: 40px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  position: relative;
+}
+
+.utilization-bar-fill {
+  height: 100%;
+  transition: width 0.5s ease;
+}
+
+.utilization-bar-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  font-size: var(--text-sm);
+}
+
+/* Quick Actions */
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-4);
 }
 
 .quick-action-btn {
@@ -368,20 +465,121 @@ const isManager = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem 1rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  padding: var(--spacing-4) var(--spacing-3);
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-lg);
   text-decoration: none;
-  color: #333;
+  color: var(--color-gray-900);
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
+  gap: var(--spacing-2);
 }
 
 .quick-action-btn:hover {
-  background: #f3f4f6;
-  border-color: #3b82f6;
+  background: var(--color-gray-100);
+  border-color: var(--color-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
+}
+
+.quick-action-icon {
+  font-size: var(--text-2xl);
+}
+
+/* Recent Activity */
+.recent-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: var(--spacing-4);
+}
+
+.recent-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.recent-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  padding: var(--spacing-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  border-left: 3px solid;
+}
+
+.recent-item-info {
+  border-left-color: var(--color-info);
+}
+
+.recent-item-success {
+  border-left-color: var(--color-success);
+}
+
+.recent-item-content {
+  flex: 1;
+}
+
+.recent-item-title {
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin-bottom: var(--spacing-1);
+  font-size: var(--text-sm);
+}
+
+.recent-item-subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-gray-600);
+}
+
+.recent-item-meta {
+  text-align: right;
+}
+
+.recent-item-amount {
+  font-weight: 600;
+  margin-bottom: var(--spacing-1);
+  font-size: var(--text-sm);
+}
+
+.recent-item-amount-info {
+  color: var(--color-info);
+}
+
+.recent-item-amount-success {
+  color: var(--color-success);
+}
+
+.recent-item-date {
+  font-size: var(--text-xs);
+  color: var(--color-gray-500);
+}
+
+.view-all-link {
+  display: block;
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.view-all-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .recent-activity-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

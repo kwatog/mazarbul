@@ -53,42 +53,40 @@ const login = async () => {
 
 <template>
   <div class="login-container">
-    <div class="login-card">
+    <BaseCard padding="lg" class="login-card">
       <h1 class="card-title">Welcome to Ebrose</h1>
       <p class="card-sub">Please sign in to continue</p>
-      
+
       <form @submit.prevent="login" class="login-form">
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input 
-            id="username" 
-            v-model="form.username" 
-            type="text" 
-            required 
-            class="form-input"
-          />
-        </div>
-        
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input 
-            id="password" 
-            v-model="form.password" 
-            type="password" 
-            required 
-            class="form-input"
-          />
-        </div>
-        
-        <button 
-          type="submit" 
-          :disabled="loading" 
-          class="btn-primary login-btn"
+        <BaseInput
+          id="username"
+          v-model="form.username"
+          type="text"
+          label="Username"
+          placeholder="Enter your username"
+          required
+        />
+
+        <BaseInput
+          id="password"
+          v-model="form.password"
+          type="password"
+          label="Password"
+          placeholder="Enter your password"
+          required
+        />
+
+        <BaseButton
+          type="submit"
+          variant="primary"
+          :loading="loading"
+          :full-width="true"
+          class="login-btn"
         >
-          {{ loading ? 'Signing in...' : 'Sign In' }}
-        </button>
+          Sign In
+        </BaseButton>
       </form>
-    </div>
+    </BaseCard>
   </div>
 </template>
 
@@ -98,48 +96,34 @@ const login = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg);
+  background: var(--color-gray-50);
 }
 
 .login-card {
-  background: var(--color-card);
-  border-radius: 12px;
-  box-shadow: var(--shadow-soft);
-  padding: 2rem;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
+}
+
+.card-title {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0 0 var(--spacing-2);
+}
+
+.card-sub {
+  font-size: var(--text-base);
+  color: var(--color-gray-500);
+  margin: 0 0 var(--spacing-6);
 }
 
 .login-form {
-  margin-top: 1.5rem;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 1rem;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(30, 215, 96, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
 }
 
 .login-btn {
-  width: 100%;
-  margin-top: 1rem;
+  margin-top: var(--spacing-2);
 }
 </style>

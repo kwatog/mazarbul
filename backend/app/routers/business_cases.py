@@ -133,11 +133,19 @@ async def delete_business_case(
     bc_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(check_record_access("BusinessCase", "bc_id", "Full"))
+    current_user: models.User = Depends(get_current_user)
 ):
+    """Delete a business case - uses hybrid access control."""
     bc = db.query(models.BusinessCase).get(bc_id)
     if not bc:
         raise HTTPException(status_code=404, detail="BusinessCase not found")
+
+    if current_user.role not in ["Admin", "Manager"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Admin/Manager can delete a business case"
+        )
+
     db.delete(bc)
     db.commit()
     return {"status": "deleted", "id": bc_id}

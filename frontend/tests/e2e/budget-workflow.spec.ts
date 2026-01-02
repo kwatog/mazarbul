@@ -73,7 +73,7 @@ test.describe('Purchase Order Workflow', () => {
     await page.click('button:has-text("+ Create PO")');
     await page.waitForTimeout(500);
 
-    // Purchase orders page uses custom modal with class="modal-overlay"
-    await expect(page.locator('.modal-overlay')).toBeVisible();
+    // Purchase orders page uses BaseModal with role="dialog"
+    await expect(page.locator('.modal-overlay, [role="dialog"]')).toBeVisible();
   });
 });

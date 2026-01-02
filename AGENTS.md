@@ -102,6 +102,8 @@ open PLAYWRIGHT_TEST_REPORT.html
 - Default Admin: `admin` / password set via `ADMIN_PASSWORD` env var (required in production)
 - JWT tokens with HttpOnly cookies
 - Roles: Admin, Manager, User, Viewer
+- **Password Policy**: Min 8 chars, uppercase, lowercase, digit, special character
+- **Token Refresh**: Access tokens refresh automatically via `/auth/refresh` endpoint
 
 ## Environment Variables
 
@@ -115,13 +117,32 @@ ENVIRONMENT=production                     # Required for SECRET_KEY enforcement
 ### Optional
 ```bash
 ALLOWED_ORIGINS=http://localhost:3000     # CORS origins (comma-separated)
-ACCESS_TOKEN_EXPIRE_MINUTES=15            # Token expiration
+ACCESS_TOKEN_EXPIRE_MINUTES=15            # Token expiration (default: 15)
 DATABASE_URL=postgresql://...             # Use external DB (default: SQLite)
 ```
 
 ## API Documentation
 - Backend API: http://127.0.0.1:8000/docs
 - Health Check: http://127.0.0.1:8000/health
+
+## Auth Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/auth/login` | POST | Login with form data, returns HttpOnly cookie |
+| `/auth/logout` | POST | Clear cookies |
+| `/auth/refresh` | POST | Refresh access token |
+| `/auth/me` | GET | Get current user |
+| `/auth/me` | PUT | Update current user (full_name, department) |
+| `/auth/password` | POST | Change password (requires current password) |
+| `/auth/register` | POST | Register new user (Admin only) |
+
+## Password Policy
+- Minimum 8 characters
+- At least one uppercase letter (A-Z)
+- At least one lowercase letter (a-z)
+- At least one digit (0-9)
+- At least one special character (!@#$%^&*(), etc.)
 
 ## 🎯 Completed Features
 
@@ -135,6 +156,8 @@ DATABASE_URL=postgresql://...             # Use external DB (default: SQLite)
 - **Owner-Group Access Scoping** - List/read endpoints filter by owner_group_id
 - **Hybrid BusinessCase Access** - Creator + line-item based + explicit grants
 - **Decimal Money Handling** - All currency fields use Numeric(10,2) with 2dp rounding
+- **Password Policy Enforcement** - Min 8 chars, uppercase, lowercase, digit, special
+- **User Profile Management** - Update full_name, department, change password
 
 ### ✅ Frontend Implementation (100% Complete)
 - **Login System** with JWT token management
@@ -162,13 +185,15 @@ DATABASE_URL=postgresql://...             # Use external DB (default: SQLite)
 - **Group-Based Access** - Organize permissions through user groups
 - **Access Inheritance** - Child records inherit parent permissions
 - **Route Protection** - Frontend pages protected by role requirements
+- **Password Policy** - Enforces strong passwords with validation
+- **Viewer Restrictions** - Viewers cannot receive Write/Full access grants
 
 ## 📱 User Interface Features
 
 ### For All Users:
 - **Dashboard** - System overview and health monitoring
 - **Purchase Orders** - View POs with role-based access
-- **Profile Management** - View user info and logout
+- **Profile Management** - View user info, update profile, change password
 
 ### For Manager/Admin Users:
 - **User Groups** - Complete group management interface
@@ -189,6 +214,8 @@ The system implements **100% of the updated requirements**:
 - ✅ Role-based security with inheritance rules
 - ✅ Owner-group access scoping for all entities
 - ✅ Hybrid BusinessCase visibility via line items
+- ✅ Password policy enforcement
+- ✅ Viewer role restrictions on access grants
 
 ### Setup Required:
 1. **Configure environment variables** for production secrets (SECRET_KEY required)
@@ -397,3 +424,63 @@ helm upgrade ebrose ./helm/ebrose \
 - **Monitoring**: Integrate with Prometheus/Grafana for observability
 - **Logging**: Use centralized logging (ELK stack, Fluentd)
 - **Backup**: Implement automated database and configuration backups
+
+---
+
+# Optional Enhancements Completed
+
+## Heroicons Integration ✅
+
+All UI components now use [Heroicons](https://heroicons.com/) for consistent iconography:
+
+| Component | Icons Used |
+|-----------|------------|
+| **BaseButton** | ArrowPathIcon (loading) |
+| **BaseModal** | XMarkIcon (close button) |
+| **BaseSelect** | ChevronUpDownIcon (dropdown), CheckIcon (selection) |
+| **BaseTable** | ArrowUpIcon, ArrowDownIcon (sort indicators) |
+| **EmptyState** | InboxIcon (default icon) |
+| **Layout/Nav** | Home, CurrencyDollar, Folder, UserGroup, Briefcase, Cog6Tooth, ArrowLeftOnRectangle, Bars3, XMark |
+
+## Mobile Responsive Navigation ✅
+
+The layout includes a fully responsive hamburger menu:
+- Bars3Icon for closed menu state
+- XMarkIcon for open menu state
+- Smooth slide-in animation
+- Touch-friendly interactions
+- Responsive breakpoints at 767px
+
+## Unit Tests ✅
+
+84 Vitest unit tests covering all base components:
+
+| Test File | Tests |
+|-----------|-------|
+| `tests/unit/BaseButton.test.ts` | 13 tests |
+| `tests/unit/BaseInput.test.ts` | 19 tests |
+| `tests/unit/BaseSelect.test.ts` | 21 tests |
+| `tests/unit/EmptyState.test.ts` | 8 tests |
+| `tests/unit/BaseTable.test.ts` | 17 tests |
+| `tests/unit/useApiFetch.test.ts` | 6 tests |
+
+**Run tests:** `npm run test:unit`
+
+## Screenshots ✅
+
+15 new screenshots captured with Heroicons UI (January 2026):
+- `screenshots/01-login-page.png`
+- `screenshots/02-dashboard.png`
+- `screenshots/03-budget-items-list.png`
+- `screenshots/04-budget-items-create-modal.png`
+- `screenshots/05-purchase-orders.png`
+- `screenshots/05b-purchase-orders-create-modal.png`
+- `screenshots/06-wbs.png`
+- `screenshots/06b-wbs-create-modal.png`
+- `screenshots/07-assets.png`
+- `screenshots/07b-assets-create-modal.png`
+- `screenshots/08-admin-groups.png`
+- `screenshots/09-admin-audit.png`
+- `screenshots/10-business-cases.png`
+- `screenshots/11-goods-receipts.png`
+- `screenshots/11b-goods-receipts-create-modal.png`

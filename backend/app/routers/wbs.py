@@ -80,10 +80,38 @@ async def create_wbs(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Get parent line item to inherit owner_group_id
+    # Get parent line item
     line_item = db.get(models.BusinessCaseLineItem, wbs.business_case_line_item_id)
     if not line_item:
         raise HTTPException(status_code=404, detail="Parent business case line item not found")
+    
+    # Validate parent access - require Write/Full access to the parent line item
+    if current_user.role == "Viewer":
+        raise HTTPException(status_code=403, detail="Viewers cannot create WBS items")
+
+    if current_user.role not in ["Admin", "Manager"]:
+        user_groups = db.query(models.UserGroupMembership).filter(
+            models.UserGroupMembership.user_id == current_user.id
+        ).all()
+        group_ids = [m.group_id for m in user_groups]
+
+        if line_item.owner_group_id not in group_ids:
+            line_item_access = db.query(models.RecordAccess).filter(
+                models.RecordAccess.record_type == "BusinessCaseLineItem",
+                models.RecordAccess.record_id == line_item.id,
+                (
+                    (models.RecordAccess.user_id == current_user.id) |
+                    (models.RecordAccess.group_id.in_(group_ids))
+                ),
+                models.RecordAccess.access_level.in_(["Write", "Full"]),
+                (models.RecordAccess.expires_at.is_(None)) | (models.RecordAccess.expires_at > datetime.utcnow().isoformat())
+            ).first()
+
+            if not line_item_access:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You do not have access to create records under this parent. You must be in the owner group or have Write/Full access."
+                )
 
     # Create WBS with inherited owner_group_id (ignore client-provided value)
     db_wbs = models.WBS(

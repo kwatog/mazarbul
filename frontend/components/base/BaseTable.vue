@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
+import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/vue/24/solid'
+
 interface Column {
   key: string
   label: string
@@ -98,8 +101,9 @@ const alignClass = (align?: string) => {
               @click="col.sortable && toggleSort(col.key)"
             >
               {{ col.label }}
-              <span v-if="sortable && sortKey === col.key" class="sort-indicator">
-                {{ sortDirection === 'asc' ? '↑' : '↓' }}
+              <span v-if="col.sortable && sortKey === col.key" class="sort-indicator">
+                <ArrowUpIcon v-if="sortDirection === 'asc'" class="sort-icon" aria-hidden="true" />
+                <ArrowDownIcon v-else class="sort-icon" aria-hidden="true" />
               </span>
             </th>
           </tr>
@@ -204,7 +208,14 @@ const alignClass = (align?: string) => {
 
 .sort-indicator {
   margin-left: var(--spacing-1);
-  opacity: 0.6;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sort-icon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--color-primary);
 }
 
 .base-table-cell {

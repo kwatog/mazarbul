@@ -1,5 +1,7 @@
 import json
 import base64
+import re
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -11,6 +13,31 @@ from ..auth import get_db, verify_password, get_password_hash, create_access_tok
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_REQUIRE_UPPERCASE = True
+PASSWORD_REQUIRE_LOWERCASE = True
+PASSWORD_REQUIRE_DIGIT = True
+PASSWORD_REQUIRE_SPECIAL = True
+
+def validate_password(password: str) -> tuple[bool, str]:
+    """Validate password against policy. Returns (is_valid, error_message)."""
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return False, f"Password must be at least {PASSWORD_MIN_LENGTH} characters long"
+    
+    if PASSWORD_REQUIRE_UPPERCASE and not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+    
+    if PASSWORD_REQUIRE_LOWERCASE and not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+    
+    if PASSWORD_REQUIRE_DIGIT and not re.search(r'\d', password):
+        return False, "Password must contain at least one digit"
+    
+    if PASSWORD_REQUIRE_SPECIAL and not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        return False, "Password must contain at least one special character"
+    
+    return True, ""
+
 @router.post("/register", response_model=schemas.User)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     # Only Admin can register new users
@@ -20,6 +47,11 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db), current_us
     db_user = db.query(models.User).filter(models.User.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
+    
+    # Validate password against policy
+    is_valid, error_msg = validate_password(user.password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
     
     hashed_pw = get_password_hash(user.password)
     new_user = models.User(
@@ -155,3 +187,54 @@ def logout(response: Response):
 @router.get("/me", response_model=schemas.User)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+@router.put("/me", response_model=schemas.User)
+def update_users_me(
+    user_update: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Update current user's profile (full_name, department). Cannot change username or role."""
+    if user_update.full_name is not None:
+        current_user.full_name = user_update.full_name
+    if user_update.department is not None:
+        current_user.department = user_update.department
+    
+    current_user.updated_by = current_user.id
+    current_user.updated_at = datetime.utcnow().isoformat()
+    
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@router.post("/password")
+def change_password(
+    password_change: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Change current user's password. Requires current password for verification."""
+    # Verify current password
+    if not verify_password(password_change.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+    
+    # Validate new password against policy
+    is_valid, error_msg = validate_password(password_change.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Hash and update password
+    current_user.hashed_password = get_password_hash(password_change.new_password)
+    current_user.updated_by = current_user.id
+    current_user.updated_at = datetime.utcnow().isoformat()
+    
+    db.commit()
+    
+    return {"message": "Password changed successfully"}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, useId } from 'vue'
+import { ChevronUpDownIcon, CheckIcon } from '@heroicons/vue/24/outline'
 
 interface Option {
   value: string | number
@@ -132,7 +133,7 @@ const sizeClasses = {
           @blur="onBlur"
         />
         <span v-else class="base-select-value">{{ selectedLabel }}</span>
-        <span class="base-select-arrow">▼</span>
+        <ChevronUpDownIcon class="base-select-arrow" aria-hidden="true" />
       </div>
 
       <Transition name="dropdown">
@@ -156,7 +157,7 @@ const sizeClasses = {
             :aria-disabled="option.disabled"
             @click="selectOption(option)"
           >
-            <span class="base-select-option-check" v-if="isSelected(option.value)">✓</span>
+            <CheckIcon v-if="isSelected(option.value)" class="base-select-option-check" aria-hidden="true" />
             {{ option.label }}
           </div>
           <div v-if="filteredOptions.length === 0" class="base-select-empty">
@@ -261,9 +262,11 @@ const sizeClasses = {
 }
 
 .base-select-arrow {
-  font-size: 0.6rem;
+  width: 1.25rem;
+  height: 1.25rem;
   color: var(--color-gray-500);
   transition: transform var(--transition-fast);
+  flex-shrink: 0;
 }
 
 .base-select.is-open .base-select-arrow {
@@ -310,7 +313,9 @@ const sizeClasses = {
 }
 
 .base-select-option-check {
-  font-size: var(--text-sm);
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 .base-select-empty {

@@ -65,7 +65,7 @@ test.describe('Entity Chain & Owner Group Inheritance', () => {
     await page.waitForTimeout(500);
 
     // Verify modal opened
-    await expect(page.locator('.modal-overlay')).toBeVisible();
+    await expect(page.locator('.modal-overlay, [role="dialog"]')).toBeVisible();
   });
 
   test('GR page has create functionality', async ({ page }) => {
@@ -112,7 +112,7 @@ test.describe('Entity Chain & Owner Group Inheritance', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
-    // Just verify page loads - check for h1 or base-card
-    await expect(page.locator('h1, .page-header')).toBeVisible({ timeout: 10000 });
+    // Just verify page loads - check for h1, .page-header, or .base-card
+    await expect(page.locator('h1, .page-header, .base-card')).toBeVisible({ timeout: 10000 });
   });
 });

@@ -26,7 +26,7 @@ test.describe('Audit Log Viewer', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
-    await expect(page.locator('h1, .page-header').filter({ hasText: 'Audit' })).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.base-card, h1, .page-header').filter({ hasText: 'Audit' })).toBeVisible({ timeout: 10000 });
   });
 
   test('should filter audit logs by user', async ({ page }) => {
@@ -99,9 +99,9 @@ test.describe('Audit Log Viewer', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
 
-    // Manager should be able to access audit logs
+    // Manager should be able to access audit logs (both Manager and Admin have access)
     const isOnAuditPage = page.url().includes('/admin/audit');
-    const hasAuditContent = await page.locator('h1, .page-header').filter({ hasText: /Audit/i }).count() > 0;
+    const hasAuditContent = await page.locator('.base-card, h1, .page-header').filter({ hasText: /Audit/i }).count() > 0;
 
     expect(isOnAuditPage || hasAuditContent).toBeTruthy();
   });

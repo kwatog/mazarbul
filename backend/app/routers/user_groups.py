@@ -31,6 +31,50 @@ def create_group(
     db.refresh(db_group)
     return db_group
 
+@router.get("/{group_id}", response_model=schemas.UserGroup)
+def get_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    group = db.query(models.UserGroup).get(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return group
+
+@router.put("/{group_id}", response_model=schemas.UserGroup)
+def update_group(
+    group_id: int,
+    group_update: schemas.UserGroupUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("Manager"))
+):
+    group = db.query(models.UserGroup).get(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    data = group_update.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(group, k, v)
+    
+    db.commit()
+    db.refresh(group)
+    return group
+
+@router.delete("/{group_id}")
+def delete_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_role("Manager"))
+):
+    group = db.query(models.UserGroup).get(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    db.delete(group)
+    db.commit()
+    return {"status": "deleted", "id": group_id}
+
 @router.get("/{group_id}/members", response_model=List[schemas.UserGroupMembership])
 def list_group_members(
     group_id: int,

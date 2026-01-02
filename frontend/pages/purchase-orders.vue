@@ -1,4 +1,25 @@
 <script setup lang="ts">
+const config = useRuntimeConfig()
+const apiBase = config.public.apiBase
+const userCookie = useCookie('user_info')
+const { success, error: showError } = useToast()
+
+const decodeUserInfo = (value: string | null | object): any => {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    let b64 = String(value)
+    if (b64.startsWith('"') && b64.endsWith('"')) {
+      b64 = b64.slice(1, -1)
+    }
+    const json = decodeURIComponent(escape(atob(b64)))
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+const user = decodeUserInfo(userCookie.value)
 
 interface PurchaseOrder {
   id: number
@@ -9,7 +30,7 @@ interface PurchaseOrder {
   po_type?: string
   start_date?: string
   end_date?: string
-  total_amount: string  // Changed from number for Decimal precision
+  total_amount: string
   currency: string
   spend_category: string
   planned_commit_date?: string
@@ -33,12 +54,11 @@ interface Group {
   name: string
 }
 
-const userCookie = useCookie('user_info')
-const user = computed(() => userCookie.value)
-
 const items = ref<PurchaseOrder[]>([])
 const assets = ref<Asset[]>([])
 const groups = ref<Group[]>([])
+const loading = ref(true)
+const error = ref<string | null>(null)
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
@@ -65,22 +85,59 @@ const editingItem = ref<PurchaseOrder | null>(null)
 const selectedPO = ref<PurchaseOrder | null>(null)
 
 // Filters
-const filterStatus = ref('')
-const filterAsset = ref(0)
-const filterSpendCategory = ref('')
+const filterStatus = ref<string | null>(null)
+const filterAsset = ref<number | null>(null)
+const filterSpendCategory = ref<string | null>(null)
 const filterSupplier = ref('')
 
 const statuses = ['Open', 'Approved', 'In Progress', 'Completed', 'Cancelled']
 const spendCategories = ['CAPEX', 'OPEX']
 const poTypes = ['Standard', 'Contract', 'Blanket', 'Services']
+const currencies = ['USD', 'EUR', 'GBP']
+
+const statusOptions = [
+  { value: null, label: 'All Statuses' },
+  ...statuses.map(s => ({ value: s, label: s }))
+]
+
+const assetOptions = computed(() => [
+  { value: null, label: 'All Assets' },
+  ...assets.value.map(a => ({ value: a.id, label: a.asset_code }))
+])
+
+const spendCategoryOptions = [
+  { value: null, label: 'All Categories' },
+  ...spendCategories.map(sc => ({ value: sc, label: sc }))
+]
+
+const assetSelectOptions = computed(() =>
+  assets.value.map(a => ({ value: a.id, label: a.asset_code }))
+)
+
+const currencyOptions = currencies.map(c => ({ value: c, label: c }))
+const poTypeOptions = [
+  { value: '', label: 'Select type' },
+  ...poTypes.map(pt => ({ value: pt, label: pt }))
+]
+
+const spendCategorySelectOptions = spendCategories.map(sc => ({ value: sc, label: sc }))
+const statusSelectOptions = statuses.map(s => ({ value: s, label: s }))
 
 // Fetch data
 const fetchItems = async () => {
   try {
+    loading.value = true
     const data = await useApiFetch('/purchase-orders', { method: 'GET' })
     items.value = data as PurchaseOrder[]
+    error.value = null
   } catch (e: any) {
-    alert(`Failed to fetch purchase orders: ${e.data?.detail || e.message}`)
+    console.error(e)
+    error.value = 'Failed to load purchase orders.'
+    if (e.response?.status === 401) {
+      navigateTo('/login')
+    }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -102,10 +159,10 @@ const fetchGroups = async () => {
   }
 }
 
-onMounted(() => {
-  fetchItems()
-  fetchAssets()
-  fetchGroups()
+onMounted(async () => {
+  await fetchAssets()
+  await fetchGroups()
+  await fetchItems()
 })
 
 // Computed
@@ -137,19 +194,19 @@ const getGroupName = (id: number) => {
   return groups.value.find(g => g.id === id)?.name || 'Unknown'
 }
 
-const getStatusColor = (status?: string) => {
-  const colors: Record<string, string> = {
-    'Open': '#3b82f6',
-    'Approved': '#10b981',
-    'In Progress': '#f59e0b',
-    'Completed': '#8b5cf6',
-    'Cancelled': '#ef4444'
+const getStatusVariant = (status?: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' | 'secondary' => {
+  const variants: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger' | 'secondary'> = {
+    'Open': 'primary',
+    'Approved': 'success',
+    'In Progress': 'warning',
+    'Completed': 'info',
+    'Cancelled': 'danger'
   }
-  return colors[status || 'Open'] || '#6b7280'
+  return variants[status || 'Open'] || 'secondary'
 }
 
-const getSpendCategoryColor = (category?: string) => {
-  return category === 'CAPEX' ? '#8b5cf6' : '#3b82f6'
+const getSpendCategoryVariant = (category?: string): 'primary' | 'info' => {
+  return category === 'CAPEX' ? 'info' : 'primary'
 }
 
 const formatCurrency = (amount: string | number, currency: string) => {
@@ -162,29 +219,29 @@ const formatCurrency = (amount: string | number, currency: string) => {
 
 // Permissions
 const canEdit = (item: PurchaseOrder) => {
-  if (!user.value) return false
-  if (user.value.role === 'Admin') return true
-  if (user.value.role === 'Manager') return true
-  return item.created_by === user.value.id
+  if (!user) return false
+  if (user.role === 'Admin') return true
+  if (user.role === 'Manager') return true
+  return item.created_by === user.id
 }
 
 const canDelete = (item: PurchaseOrder) => {
-  if (!user.value) return false
-  if (user.value.role === 'Admin') return true
-  if (user.value.role === 'Manager') return true
+  if (!user) return false
+  if (user.role === 'Admin') return true
+  if (user.role === 'Manager') return true
   return false
 }
 
 const canShareAccess = (item: PurchaseOrder) => {
-  if (!user.value) return false
-  if (['Admin', 'Manager'].includes(user.value.role)) return true
-  return item.created_by === user.value.id
+  if (!user) return false
+  if (['Admin', 'Manager'].includes(user.role)) return true
+  return item.created_by === user.id
 }
 
 // CRUD operations
-const openCreateModal = () => {
+const resetForm = () => {
   form.value = {
-    asset_id: 0,
+    asset_id: assets.value[0]?.id || 0,
     po_number: '',
     ariba_pr_number: '',
     supplier: '',
@@ -199,6 +256,10 @@ const openCreateModal = () => {
     owner_group_id: 0,
     status: 'Open'
   }
+}
+
+const openCreateModal = () => {
+  resetForm()
   showCreateModal.value = true
 }
 
@@ -234,37 +295,43 @@ const closeModals = () => {
   showAccessModal.value = false
   editingItem.value = null
   selectedPO.value = null
+  resetForm()
 }
 
 const createItem = async () => {
   try {
     if (!form.value.asset_id) {
-      alert('Please select an asset')
+      showError('Please select an asset')
       return
     }
     if (!form.value.po_number.trim()) {
-      alert('PO Number is required')
+      showError('PO Number is required')
       return
     }
-    if (!form.value.total_amount || form.value.total_amount <= 0) {
-      alert('Total Amount must be greater than 0')
+    if (!form.value.total_amount || parseFloat(form.value.total_amount) <= 0) {
+      showError('Total Amount must be greater than 0')
       return
     }
 
+    loading.value = true
     await useApiFetch('/purchase-orders', {
       method: 'POST',
       body: form.value
     })
     await fetchItems()
     closeModals()
+    success('Purchase order created successfully!')
   } catch (e: any) {
-    alert(`Failed to create purchase order: ${e.data?.detail || e.message}`)
+    showError(`Failed to create purchase order: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
 
 const updateItem = async () => {
   if (!editingItem.value) return
   try {
+    loading.value = true
     await useApiFetch(`/purchase-orders/${editingItem.value.id}`, {
       method: 'PUT',
       body: {
@@ -283,315 +350,376 @@ const updateItem = async () => {
     })
     await fetchItems()
     closeModals()
+    success('Purchase order updated successfully!')
   } catch (e: any) {
-    alert(`Failed to update purchase order: ${e.data?.detail || e.message}`)
+    showError(`Failed to update purchase order: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
 
 const deleteItem = async (item: PurchaseOrder) => {
   if (!confirm(`Are you sure you want to delete PO "${item.po_number}"?`)) return
   try {
+    loading.value = true
     await useApiFetch(`/purchase-orders/${item.id}`, { method: 'DELETE' })
     await fetchItems()
+    success('Purchase order deleted successfully!')
   } catch (e: any) {
-    alert(`Failed to delete purchase order: ${e.data?.detail || e.message}`)
+    showError(`Failed to delete purchase order: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
+
+const tableColumns = [
+  { key: 'po_number', label: 'PO Number', sortable: true },
+  { key: 'asset', label: 'Asset', sortable: false },
+  { key: 'supplier', label: 'Supplier', sortable: true },
+  { key: 'total_amount', label: 'Amount', sortable: true, align: 'right' as const },
+  { key: 'spend_category', label: 'Category', sortable: true, align: 'center' as const },
+  { key: 'status', label: 'Status', sortable: true, align: 'center' as const },
+  { key: 'owner_group', label: 'Owner Group', sortable: false },
+  { key: 'actions', label: 'Actions', sortable: false }
+]
 </script>
 
 <template>
-  <div class="page-container">
-    <div class="page-header">
-      <h1>Purchase Orders</h1>
-      <button @click="openCreateModal" class="btn-primary">+ Create PO</button>
+  <BaseCard title="Purchase Orders" subtitle="Manage purchase orders and procurement">
+    <template #header>
+      <div class="header-actions">
+        <BaseButton variant="primary" @click="openCreateModal">
+          + Create PO
+        </BaseButton>
+      </div>
+    </template>
+
+    <div class="filters">
+      <BaseSelect
+        v-model="filterStatus"
+        :options="statusOptions"
+        label="Status"
+        @change="fetchItems"
+      />
+      <BaseSelect
+        v-model="filterAsset"
+        :options="assetOptions"
+        label="Asset"
+        @change="fetchItems"
+      />
+      <BaseSelect
+        v-model="filterSpendCategory"
+        :options="spendCategoryOptions"
+        label="Spend Category"
+        @change="fetchItems"
+      />
+      <BaseInput
+        v-model="filterSupplier"
+        label="Supplier"
+        placeholder="Search supplier..."
+      />
     </div>
 
-    <!-- Filters -->
-    <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-      <div style="flex: 1; min-width: 180px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Status</label>
-        <select v-model="filterStatus" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">All Statuses</option>
-          <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 180px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Asset</label>
-        <select v-model.number="filterAsset" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-          <option :value="0">All Assets</option>
-          <option v-for="a in assets" :key="a.id" :value="a.id">{{ a.asset_code }}</option>
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 180px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Spend Category</label>
-        <select v-model="filterSpendCategory" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">All Categories</option>
-          <option v-for="sc in spendCategories" :key="sc" :value="sc">{{ sc }}</option>
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 180px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Supplier</label>
-        <input v-model="filterSupplier" type="text" placeholder="Search supplier..." style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" />
-      </div>
+    <div v-if="loading" class="loading-state">
+      <LoadingSpinner size="lg" label="Loading purchase orders..." />
     </div>
 
-    <!-- List -->
-    <div v-if="filteredItems.length === 0" class="empty-state">
-      <p>No purchase orders found</p>
-      <button @click="openCreateModal" class="btn-primary">Create First PO</button>
-    </div>
+    <p v-else-if="error" class="error-message">{{ error }}</p>
 
-    <div v-else class="table-container">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>PO Number</th>
-            <th>Asset</th>
-            <th>Supplier</th>
-            <th>Amount</th>
-            <th>Category</th>
-            <th>Status</th>
-            <th>Owner Group</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in filteredItems" :key="item.id">
-            <td><strong>{{ item.po_number }}</strong></td>
-            <td>{{ getAssetCode(item.asset_id) }}</td>
-            <td>{{ item.supplier || '-' }}</td>
-            <td>{{ formatCurrency(item.total_amount, item.currency) }}</td>
-            <td>
-              <span class="badge" :style="{ backgroundColor: getSpendCategoryColor(item.spend_category) }">
-                {{ item.spend_category }}
-              </span>
-            </td>
-            <td>
-              <span class="badge" :style="{ backgroundColor: getStatusColor(item.status) }">
-                {{ item.status || 'Open' }}
-              </span>
-            </td>
-            <td>{{ getGroupName(item.owner_group_id) }}</td>
-            <td>
-              <div style="display: flex; gap: 0.5rem;">
-                <button v-if="canEdit(item)" @click="openEditModal(item)" class="btn-sm">Edit</button>
-                <button v-if="canDelete(item)" @click="deleteItem(item)" class="btn-sm btn-danger">Delete</button>
-                <button v-if="canShareAccess(item)" @click="openAccessModal(item)" class="btn-sm" style="background-color: #10b981;">Share</button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <EmptyState
+      v-else-if="filteredItems.length === 0"
+      title="No purchase orders found"
+      description="Click 'Create PO' to add your first purchase order."
+      action-text="Create PO"
+      @action="openCreateModal"
+    />
+
+    <BaseTable
+      v-else
+      :columns="tableColumns"
+      :data="filteredItems"
+      :loading="loading"
+      selectable
+      sticky-header
+      empty-message="No purchase orders found"
+    >
+      <template #cell-po_number="{ value }">
+        <strong>{{ value }}</strong>
+      </template>
+
+      <template #cell-asset="{ row }">
+        {{ getAssetCode(row.asset_id) }}
+      </template>
+
+      <template #cell-supplier="{ value }">
+        {{ value || '-' }}
+      </template>
+
+      <template #cell-total_amount="{ value, row }">
+        {{ formatCurrency(value, row.currency) }}
+      </template>
+
+      <template #cell-spend_category="{ value }">
+        <BaseBadge :variant="getSpendCategoryVariant(value)" size="sm">
+          {{ value }}
+        </BaseBadge>
+      </template>
+
+      <template #cell-status="{ value }">
+        <BaseBadge :variant="getStatusVariant(value)" size="sm">
+          {{ value || 'Open' }}
+        </BaseBadge>
+      </template>
+
+      <template #cell-owner_group="{ row }">
+        <BaseBadge variant="secondary" size="sm">
+          {{ getGroupName(row.owner_group_id) }}
+        </BaseBadge>
+      </template>
+
+      <template #cell-actions="{ row }">
+        <div class="action-buttons">
+          <BaseButton
+            v-if="canEdit(row)"
+            size="sm"
+            variant="secondary"
+            @click="openEditModal(row)"
+          >
+            Edit
+          </BaseButton>
+          <BaseButton
+            v-if="canDelete(row)"
+            size="sm"
+            variant="danger"
+            @click="deleteItem(row)"
+          >
+            Delete
+          </BaseButton>
+          <BaseButton
+            v-if="canShareAccess(row)"
+            size="sm"
+            variant="success"
+            @click="openAccessModal(row)"
+          >
+            Share
+          </BaseButton>
+        </div>
+      </template>
+    </BaseTable>
 
     <!-- Create Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="closeModals">
-      <div class="modal-content" style="max-width: 700px;">
-        <div class="modal-header">
-          <h2>Create Purchase Order</h2>
-          <button @click="closeModals" class="btn-close">&times;</button>
+    <BaseModal v-model="showCreateModal" title="Create Purchase Order" size="lg">
+      <form @submit.prevent="createItem">
+        <div class="form-row">
+          <BaseSelect
+            v-model="form.asset_id"
+            :options="assetSelectOptions"
+            label="Asset"
+            required
+          />
+          <BaseInput
+            v-model="form.po_number"
+            label="PO Number"
+            placeholder="e.g., PO-2025-001"
+            required
+          />
         </div>
-        <div class="modal-body">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Asset *</label>
-              <select v-model.number="form.asset_id" required>
-                <option :value="0" disabled>Select an asset</option>
-                <option v-for="a in assets" :key="a.id" :value="a.id">{{ a.asset_code }}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>PO Number *</label>
-              <input v-model="form.po_number" type="text" placeholder="e.g., PO-2025-001" required />
-            </div>
-          </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Ariba PR Number</label>
-              <input v-model="form.ariba_pr_number" type="text" placeholder="Optional" />
-            </div>
-            <div class="form-group">
-              <label>Supplier</label>
-              <input v-model="form.supplier" type="text" placeholder="Supplier name" />
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>PO Type</label>
-              <select v-model="form.po_type">
-                <option value="">Select type</option>
-                <option v-for="pt in poTypes" :key="pt" :value="pt">{{ pt }}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Spend Category *</label>
-              <select v-model="form.spend_category" required>
-                <option v-for="sc in spendCategories" :key="sc" :value="sc">{{ sc }}</option>
-              </select>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Total Amount *</label>
-              <input v-model="form.total_amount" type="text" step="0.01" min="0" required />
-            </div>
-            <div class="form-group">
-              <label>Currency *</label>
-              <select v-model="form.currency" required>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Status</label>
-              <select v-model="form.status">
-                <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-              </select>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Start Date</label>
-              <input v-model="form.start_date" type="date" />
-            </div>
-            <div class="form-group">
-              <label>End Date</label>
-              <input v-model="form.end_date" type="date" />
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Planned Commit Date</label>
-              <input v-model="form.planned_commit_date" type="date" />
-            </div>
-            <div class="form-group">
-              <label>Actual Commit Date</label>
-              <input v-model="form.actual_commit_date" type="date" />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <p style="font-size: 0.85rem; color: #666; margin: 0;">
-              <strong>Note:</strong> Owner Group will be automatically inherited from the selected Asset.
-            </p>
-          </div>
+        <div class="form-row">
+          <BaseInput
+            v-model="form.ariba_pr_number"
+            label="Ariba PR Number"
+            placeholder="Optional"
+          />
+          <BaseInput
+            v-model="form.supplier"
+            label="Supplier"
+            placeholder="Supplier name"
+          />
         </div>
-        <div class="modal-footer">
-          <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="createItem" class="btn-primary">Create</button>
+
+        <div class="form-row">
+          <BaseSelect
+            v-model="form.po_type"
+            :options="poTypeOptions"
+            label="PO Type"
+          />
+          <BaseSelect
+            v-model="form.spend_category"
+            :options="spendCategorySelectOptions"
+            label="Spend Category"
+            required
+          />
         </div>
-      </div>
-    </div>
+
+        <div class="form-row-triple">
+          <BaseInput
+            v-model="form.total_amount"
+            label="Total Amount"
+            type="text"
+            placeholder="0.00"
+            required
+          />
+          <BaseSelect
+            v-model="form.currency"
+            :options="currencyOptions"
+            label="Currency"
+            required
+          />
+          <BaseSelect
+            v-model="form.status"
+            :options="statusSelectOptions"
+            label="Status"
+          />
+        </div>
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.start_date"
+            label="Start Date"
+            type="date"
+          />
+          <BaseInput
+            v-model="form.end_date"
+            label="End Date"
+            type="date"
+          />
+        </div>
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.planned_commit_date"
+            label="Planned Commit Date"
+            type="date"
+          />
+          <BaseInput
+            v-model="form.actual_commit_date"
+            label="Actual Commit Date"
+            type="date"
+          />
+        </div>
+
+        <div class="help-text">
+          <strong>Note:</strong> Owner Group will be automatically inherited from the selected Asset.
+        </div>
+      </form>
+
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="loading" @click="closeModals">
+          Cancel
+        </BaseButton>
+        <BaseButton variant="primary" :loading="loading" @click="createItem">
+          Create Purchase Order
+        </BaseButton>
+      </template>
+    </BaseModal>
 
     <!-- Edit Modal -->
-    <div v-if="showEditModal" class="modal-overlay" @click.self="closeModals">
-      <div class="modal-content" style="max-width: 700px;">
-        <div class="modal-header">
-          <h2>Edit Purchase Order</h2>
-          <button @click="closeModals" class="btn-close">&times;</button>
+    <BaseModal v-model="showEditModal" title="Edit Purchase Order" size="lg">
+      <form @submit.prevent="updateItem">
+        <div class="form-row">
+          <BaseInput
+            :model-value="getAssetCode(form.asset_id)"
+            label="Asset"
+            disabled
+            help-text="Cannot change parent entity"
+          />
+          <BaseInput
+            :model-value="form.po_number"
+            label="PO Number"
+            disabled
+            help-text="Cannot change PO number"
+          />
         </div>
-        <div class="modal-body">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Asset</label>
-              <input :value="getAssetCode(form.asset_id)" type="text" disabled />
-              <p style="font-size: 0.85rem; color: #666; margin: 0.25rem 0 0 0;">Cannot change parent entity</p>
-            </div>
-            <div class="form-group">
-              <label>PO Number</label>
-              <input :value="form.po_number" type="text" disabled />
-              <p style="font-size: 0.85rem; color: #666; margin: 0.25rem 0 0 0;">Cannot change PO number</p>
-            </div>
-          </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Ariba PR Number</label>
-              <input v-model="form.ariba_pr_number" type="text" />
-            </div>
-            <div class="form-group">
-              <label>Supplier</label>
-              <input v-model="form.supplier" type="text" />
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>PO Type</label>
-              <select v-model="form.po_type">
-                <option value="">Select type</option>
-                <option v-for="pt in poTypes" :key="pt" :value="pt">{{ pt }}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Spend Category *</label>
-              <select v-model="form.spend_category" required>
-                <option v-for="sc in spendCategories" :key="sc" :value="sc">{{ sc }}</option>
-              </select>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Total Amount *</label>
-              <input v-model="form.total_amount" type="text" step="0.01" min="0" required />
-            </div>
-            <div class="form-group">
-              <label>Currency *</label>
-              <select v-model="form.currency" required>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Status</label>
-              <select v-model="form.status">
-                <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-              </select>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Start Date</label>
-              <input v-model="form.start_date" type="date" />
-            </div>
-            <div class="form-group">
-              <label>End Date</label>
-              <input v-model="form.end_date" type="date" />
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Planned Commit Date</label>
-              <input v-model="form.planned_commit_date" type="date" />
-            </div>
-            <div class="form-group">
-              <label>Actual Commit Date</label>
-              <input v-model="form.actual_commit_date" type="date" />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Owner Group (Inherited)</label>
-            <input :value="getGroupName(form.owner_group_id)" type="text" disabled />
-            <p style="font-size: 0.85rem; color: #666; margin: 0.25rem 0 0 0;">Inherited from parent Asset</p>
-          </div>
+        <div class="form-row">
+          <BaseInput
+            v-model="form.ariba_pr_number"
+            label="Ariba PR Number"
+          />
+          <BaseInput
+            v-model="form.supplier"
+            label="Supplier"
+          />
         </div>
-        <div class="modal-footer">
-          <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="updateItem" class="btn-primary">Update</button>
+
+        <div class="form-row">
+          <BaseSelect
+            v-model="form.po_type"
+            :options="poTypeOptions"
+            label="PO Type"
+          />
+          <BaseSelect
+            v-model="form.spend_category"
+            :options="spendCategorySelectOptions"
+            label="Spend Category"
+            required
+          />
         </div>
-      </div>
-    </div>
+
+        <div class="form-row-triple">
+          <BaseInput
+            v-model="form.total_amount"
+            label="Total Amount"
+            type="text"
+            required
+          />
+          <BaseSelect
+            v-model="form.currency"
+            :options="currencyOptions"
+            label="Currency"
+            required
+          />
+          <BaseSelect
+            v-model="form.status"
+            :options="statusSelectOptions"
+            label="Status"
+          />
+        </div>
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.start_date"
+            label="Start Date"
+            type="date"
+          />
+          <BaseInput
+            v-model="form.end_date"
+            label="End Date"
+            type="date"
+          />
+        </div>
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.planned_commit_date"
+            label="Planned Commit Date"
+            type="date"
+          />
+          <BaseInput
+            v-model="form.actual_commit_date"
+            label="Actual Commit Date"
+            type="date"
+          />
+        </div>
+
+        <BaseInput
+          :model-value="getGroupName(form.owner_group_id)"
+          label="Owner Group (Inherited)"
+          disabled
+          help-text="Inherited from parent Asset"
+        />
+      </form>
+
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="loading" @click="closeModals">
+          Cancel
+        </BaseButton>
+        <BaseButton variant="primary" :loading="loading" @click="updateItem">
+          Save Changes
+        </BaseButton>
+      </template>
+    </BaseModal>
 
     <!-- Record Access Modal -->
     <RecordAccessModal
@@ -602,5 +730,76 @@ const deleteItem = async (item: PurchaseOrder) => {
       @close="closeModals"
       @updated="fetchItems"
     />
-  </div>
+  </BaseCard>
 </template>
+
+<style scoped>
+.header-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.filters {
+  display: flex;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-lg);
+}
+
+.loading-state {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-12);
+}
+
+.error-message {
+  color: var(--color-error);
+  padding: var(--spacing-4);
+  text-align: center;
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-4);
+}
+
+.form-row-triple {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--spacing-4);
+}
+
+.help-text {
+  font-size: var(--text-sm);
+  color: var(--color-gray-500);
+  padding: var(--spacing-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-2);
+}
+
+@media (max-width: 768px) {
+  .filters {
+    flex-direction: column;
+  }
+
+  .form-row,
+  .form-row-triple {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .action-buttons {
+    flex-direction: column;
+  }
+}
+</style>

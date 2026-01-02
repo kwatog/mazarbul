@@ -1,8 +1,8 @@
 <script setup lang="ts">
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase
-const token = useCookie('access_token')
 const userInfo = useCookie('user_info')
+const { success, error: showError } = useToast()
 
 const decodeUserInfo = (value: string | null | object): any => {
   if (!value) return null
@@ -58,13 +58,30 @@ const filters = ref({
   date_to: ''
 })
 
+const actionOptions = [
+  { value: '', label: 'All Actions' },
+  { value: 'CREATE', label: 'CREATE' },
+  { value: 'UPDATE', label: 'UPDATE' },
+  { value: 'DELETE', label: 'DELETE' }
+]
+
+const userOptions = computed(() => [
+  { value: null, label: 'All Users' },
+  ...users.value.map(user => ({
+    value: user.id,
+    label: `${user.full_name} (@${user.username})`
+  }))
+])
+
 const fetchAuditLogs = async () => {
   try {
     loading.value = true
     const res = await useApiFetch<AuditLog[]>(`/audit-logs`)
     auditLogs.value = res
+    error.value = null
   } catch (e: any) {
     error.value = 'Failed to load audit logs'
+    showError('Failed to load audit logs')
     if (e.response?.status === 401) await navigateTo('/login')
   } finally {
     loading.value = false
@@ -88,12 +105,12 @@ const formatTimestamp = (timestamp: string) => {
   return new Date(timestamp).toLocaleString()
 }
 
-const getActionColor = (action: string) => {
+const getActionVariant = (action: string): 'success' | 'warning' | 'danger' | 'secondary' => {
   switch (action) {
-    case 'CREATE': return '#16a34a'
-    case 'UPDATE': return '#ea580c'
-    case 'DELETE': return '#dc2626'
-    default: return '#64748b'
+    case 'CREATE': return 'success'
+    case 'UPDATE': return 'warning'
+    case 'DELETE': return 'danger'
+    default: return 'secondary'
   }
 }
 
@@ -108,32 +125,32 @@ const parseJsonSafely = (jsonString?: string) => {
 
 const filteredLogs = computed(() => {
   let filtered = [...auditLogs.value]
-  
+
   if (filters.value.table_name) {
-    filtered = filtered.filter(log => 
+    filtered = filtered.filter(log =>
       log.table_name.toLowerCase().includes(filters.value.table_name.toLowerCase())
     )
   }
-  
+
   if (filters.value.action) {
     filtered = filtered.filter(log => log.action === filters.value.action)
   }
-  
+
   if (filters.value.user_id) {
     filtered = filtered.filter(log => log.user_id === filters.value.user_id)
   }
-  
+
   if (filters.value.date_from) {
     const fromDate = new Date(filters.value.date_from)
     filtered = filtered.filter(log => new Date(log.timestamp) >= fromDate)
   }
-  
+
   if (filters.value.date_to) {
     const toDate = new Date(filters.value.date_to)
     toDate.setHours(23, 59, 59) // End of day
     filtered = filtered.filter(log => new Date(log.timestamp) <= toDate)
   }
-  
+
   return filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 })
 
@@ -145,7 +162,17 @@ const clearFilters = () => {
     date_from: '',
     date_to: ''
   }
+  success('Filters cleared')
 }
+
+const tableColumns = [
+  { key: 'timestamp', label: 'Timestamp', sortable: true },
+  { key: 'user', label: 'User', sortable: false },
+  { key: 'action', label: 'Action', sortable: true, align: 'center' as const },
+  { key: 'table_name', label: 'Table', sortable: true },
+  { key: 'record_id', label: 'Record ID', sortable: true, align: 'center' as const },
+  { key: 'changes', label: 'Changes', sortable: false }
+]
 
 onMounted(async () => {
   await Promise.all([fetchAuditLogs(), fetchUsers()])
@@ -153,365 +180,351 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div>
-    <div class="admin-header">
-      <h1 class="page-title">Audit Logs</h1>
-      <p class="page-subtitle">View all system changes and activities</p>
-    </div>
-
-    <!-- Filters -->
-    <div class="filters-panel card">
-      <h3 class="card-title">Filters</h3>
-      
+  <BaseCard
+    title="Audit Logs"
+    subtitle="View all system changes and activities"
+  >
+    <!-- Filters Panel -->
+    <div class="filters-section" role="search" aria-label="Audit log filters">
       <div class="filters-grid">
-        <div class="form-group">
-          <label for="tableFilter">Table</label>
-          <input 
-            id="tableFilter"
-            v-model="filters.table_name"
-            type="text" 
-            placeholder="e.g. purchase_order"
-            class="form-input"
-          />
-        </div>
-        
-        <div class="form-group">
-          <label for="actionFilter">Action</label>
-          <select id="actionFilter" v-model="filters.action" class="form-input">
-            <option value="">All Actions</option>
-            <option value="CREATE">CREATE</option>
-            <option value="UPDATE">UPDATE</option>
-            <option value="DELETE">DELETE</option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label for="userFilter">User</label>
-          <select id="userFilter" v-model="filters.user_id" class="form-input">
-            <option :value="null">All Users</option>
-            <option v-for="user in users" :key="user.id" :value="user.id">
-              {{ user.full_name }} (@{{ user.username }})
-            </option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label for="dateFrom">Date From</label>
-          <input 
-            id="dateFrom"
-            v-model="filters.date_from"
-            type="date" 
-            class="form-input"
-          />
-        </div>
-        
-        <div class="form-group">
-          <label for="dateTo">Date To</label>
-          <input 
-            id="dateTo"
-            v-model="filters.date_to"
-            type="date" 
-            class="form-input"
-          />
-        </div>
-        
-        <div class="form-group">
-          <label>&nbsp;</label>
-          <button @click="clearFilters" class="btn-secondary">
+        <BaseInput
+          v-model="filters.table_name"
+          label="Table Name"
+          placeholder="e.g. purchase_order"
+          aria-label="Filter by table name"
+        />
+
+        <BaseSelect
+          v-model="filters.action"
+          :options="actionOptions"
+          label="Action"
+          aria-label="Filter by action type"
+        />
+
+        <BaseSelect
+          v-model="filters.user_id"
+          :options="userOptions"
+          label="User"
+          aria-label="Filter by user"
+        />
+
+        <BaseInput
+          v-model="filters.date_from"
+          label="Date From"
+          type="date"
+          aria-label="Filter by start date"
+        />
+
+        <BaseInput
+          v-model="filters.date_to"
+          label="Date To"
+          type="date"
+          aria-label="Filter by end date"
+        />
+
+        <div class="filter-actions">
+          <BaseButton
+            variant="secondary"
+            @click="clearFilters"
+            aria-label="Clear all filters"
+          >
             Clear Filters
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
 
-    <p v-if="loading">Loading audit logs...</p>
-    <p v-else-if="error" style="color: #dc2626;">{{ error }}</p>
-    
     <!-- Results Summary -->
-    <div v-else class="results-summary">
+    <div v-if="!loading && !error" class="results-summary" role="status" aria-live="polite">
       Showing {{ filteredLogs.length }} of {{ auditLogs.length }} audit entries
     </div>
-    
+
+    <!-- Loading State -->
+    <div v-if="loading" class="loading-state">
+      <LoadingSpinner size="lg" label="Loading audit logs..." />
+    </div>
+
+    <!-- Error State -->
+    <p v-else-if="error" class="error-message" role="alert">{{ error }}</p>
+
+    <!-- Empty State -->
+    <EmptyState
+      v-else-if="filteredLogs.length === 0"
+      title="No audit logs found"
+      description="No audit logs match your current filter criteria. Try adjusting the filters above."
+      action-text="Clear Filters"
+      @action="clearFilters"
+    />
+
     <!-- Audit Logs Table -->
-    <div v-if="!loading && !error" class="logs-table card">
-      <div v-if="filteredLogs.length === 0" class="empty-state">
-        No audit logs found matching your criteria.
-      </div>
-      
-      <div v-else class="table-container">
-        <table class="audit-table">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>User</th>
-              <th>Action</th>
-              <th>Table</th>
-              <th>Record ID</th>
-              <th>Changes</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="log in filteredLogs" :key="log.id" class="audit-row">
-              <td class="timestamp-cell">
-                {{ formatTimestamp(log.timestamp) }}
-              </td>
-              
-              <td class="user-cell">
-                <span v-if="log.user_id">
-                  {{ getUserById(log.user_id)?.full_name || 'Unknown' }}
-                  <br>
-                  <small>@{{ getUserById(log.user_id)?.username }}</small>
-                </span>
-                <span v-else class="system-user">System</span>
-              </td>
-              
-              <td class="action-cell">
-                <span 
-                  class="action-badge" 
-                  :style="{ backgroundColor: getActionColor(log.action), color: 'white' }"
-                >
-                  {{ log.action }}
-                </span>
-              </td>
-              
-              <td class="table-cell">{{ log.table_name }}</td>
-              <td class="record-cell">{{ log.record_id }}</td>
-              
-              <td class="changes-cell">
-                <div v-if="log.action === 'CREATE'" class="change-summary">
-                  <strong>Created:</strong>
-                  <details v-if="log.new_values">
-                    <summary>View details</summary>
-                    <pre class="json-preview">{{ JSON.stringify(parseJsonSafely(log.new_values), null, 2) }}</pre>
-                  </details>
-                </div>
-                
-                <div v-else-if="log.action === 'DELETE'" class="change-summary">
-                  <strong>Deleted:</strong>
-                  <details v-if="log.old_values">
-                    <summary>View details</summary>
-                    <pre class="json-preview">{{ JSON.stringify(parseJsonSafely(log.old_values), null, 2) }}</pre>
-                  </details>
-                </div>
-                
-                <div v-else-if="log.action === 'UPDATE'" class="change-summary">
-                  <strong>Updated</strong>
-                  <div v-if="log.old_values && log.new_values" class="update-details">
-                    <details>
-                      <summary>View changes</summary>
-                      <div class="change-comparison">
-                        <div class="change-section">
-                          <h5>Before:</h5>
-                          <pre class="json-preview">{{ JSON.stringify(parseJsonSafely(log.old_values), null, 2) }}</pre>
-                        </div>
-                        <div class="change-section">
-                          <h5>After:</h5>
-                          <pre class="json-preview">{{ JSON.stringify(parseJsonSafely(log.new_values), null, 2) }}</pre>
-                        </div>
-                      </div>
-                    </details>
+    <BaseTable
+      v-else
+      :columns="tableColumns"
+      :data="filteredLogs"
+      :loading="loading"
+      sticky-header
+      empty-message="No audit logs found"
+    >
+      <template #cell-timestamp="{ value }">
+        <code class="timestamp-code">{{ formatTimestamp(value) }}</code>
+      </template>
+
+      <template #cell-user="{ row }">
+        <div v-if="row.user_id" class="user-info">
+          <div class="user-name">{{ getUserById(row.user_id)?.full_name || 'Unknown' }}</div>
+          <div class="user-username">@{{ getUserById(row.user_id)?.username }}</div>
+        </div>
+        <span v-else class="system-user">System</span>
+      </template>
+
+      <template #cell-action="{ value }">
+        <BaseBadge :variant="getActionVariant(value)" size="sm">
+          {{ value }}
+        </BaseBadge>
+      </template>
+
+      <template #cell-table_name="{ value }">
+        <code class="table-code">{{ value }}</code>
+      </template>
+
+      <template #cell-record_id="{ value }">
+        <code class="record-code">{{ value }}</code>
+      </template>
+
+      <template #cell-changes="{ row }">
+        <div class="changes-cell">
+          <!-- CREATE Action -->
+          <div v-if="row.action === 'CREATE'" class="change-summary">
+            <strong class="change-label">Created:</strong>
+            <details v-if="row.new_values" class="change-details">
+              <summary class="change-toggle">View details</summary>
+              <pre class="json-preview" role="region" aria-label="Created record data">{{ JSON.stringify(parseJsonSafely(row.new_values), null, 2) }}</pre>
+            </details>
+          </div>
+
+          <!-- DELETE Action -->
+          <div v-else-if="row.action === 'DELETE'" class="change-summary">
+            <strong class="change-label">Deleted:</strong>
+            <details v-if="row.old_values" class="change-details">
+              <summary class="change-toggle">View details</summary>
+              <pre class="json-preview" role="region" aria-label="Deleted record data">{{ JSON.stringify(parseJsonSafely(row.old_values), null, 2) }}</pre>
+            </details>
+          </div>
+
+          <!-- UPDATE Action -->
+          <div v-else-if="row.action === 'UPDATE'" class="change-summary">
+            <strong class="change-label">Updated</strong>
+            <div v-if="row.old_values && row.new_values" class="update-details">
+              <details class="change-details">
+                <summary class="change-toggle">View changes</summary>
+                <div class="change-comparison" role="region" aria-label="Before and after comparison">
+                  <div class="change-section">
+                    <h5 class="change-section-title">Before:</h5>
+                    <pre class="json-preview">{{ JSON.stringify(parseJsonSafely(row.old_values), null, 2) }}</pre>
+                  </div>
+                  <div class="change-section">
+                    <h5 class="change-section-title">After:</h5>
+                    <pre class="json-preview">{{ JSON.stringify(parseJsonSafely(row.new_values), null, 2) }}</pre>
                   </div>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+              </details>
+            </div>
+          </div>
+        </div>
+      </template>
+    </BaseTable>
+  </BaseCard>
 </template>
 
 <style scoped>
-.admin-header {
-  margin-bottom: 2rem;
-}
-
-.page-title {
-  font-size: 2rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-}
-
-.page-subtitle {
-  color: var(--color-muted);
-  font-size: 1.1rem;
-  margin-bottom: 0;
-}
-
-.filters-panel {
-  margin-bottom: 1.5rem;
+/* Filters Section */
+.filters-section {
+  padding: var(--spacing-6);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-6);
 }
 
 .filters-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: var(--spacing-4);
 }
 
-.form-group {
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Results Summary */
+.results-summary {
+  margin-bottom: var(--spacing-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  padding: var(--spacing-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+}
+
+/* Loading & Error States */
+.loading-state {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-12);
+}
+
+.error-message {
+  color: var(--color-error);
+  padding: var(--spacing-6);
+  text-align: center;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-error);
+}
+
+/* Table Cell Styling */
+.timestamp-code {
+  font-family: monospace;
+  background: var(--color-gray-100);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.user-info {
   display: flex;
   flex-direction: column;
+  gap: var(--spacing-1);
 }
 
-.form-group label {
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+.user-name {
+  font-weight: var(--font-medium);
+  color: var(--color-text);
 }
 
-.form-input {
-  padding: 0.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.9rem;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(30, 215, 96, 0.1);
-}
-
-.btn-secondary {
-  background-color: #f1f5f9;
-  color: #475569;
-  border: 1px solid #cbd5e1;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.results-summary {
-  margin-bottom: 1rem;
-  color: var(--color-muted);
-  font-size: 0.9rem;
-}
-
-.logs-table {
-  overflow: hidden;
-}
-
-.table-container {
-  overflow-x: auto;
-}
-
-.audit-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-.audit-table th {
-  background-color: #f8fafc;
-  padding: 0.75rem;
-  text-align: left;
-  font-weight: 600;
-  border-bottom: 2px solid #e2e8f0;
-  white-space: nowrap;
-}
-
-.audit-table td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #f1f5f9;
-  vertical-align: top;
-}
-
-.audit-row:hover {
-  background-color: #f8fafc;
-}
-
-.timestamp-cell {
-  white-space: nowrap;
-  font-family: monospace;
-}
-
-.user-cell small {
-  color: var(--color-muted);
+.user-username {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 .system-user {
   font-style: italic;
-  color: var(--color-muted);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
-.action-badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-}
-
-.table-cell {
+.table-code,
+.record-code {
   font-family: monospace;
+  background: var(--color-gray-100);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
 }
 
-.record-cell {
-  font-family: monospace;
-  color: var(--color-muted);
+.record-code {
+  color: var(--color-text-muted);
 }
 
+/* Changes Cell */
 .changes-cell {
-  max-width: 300px;
+  max-width: 400px;
 }
 
-.change-summary strong {
+.change-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.change-label {
   color: var(--color-text);
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+}
+
+.change-details {
+  margin-top: var(--spacing-2);
+}
+
+.change-toggle {
+  cursor: pointer;
+  color: var(--color-primary);
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  padding: var(--spacing-2) 0;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+
+.change-toggle:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+.change-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .json-preview {
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  padding: 0.5rem;
-  font-size: 0.75rem;
-  max-height: 200px;
+  background-color: var(--color-gray-50);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+  font-size: var(--text-xs);
+  font-family: monospace;
+  max-height: 300px;
   overflow: auto;
-  margin: 0.5rem 0;
+  margin-top: var(--spacing-2);
+  line-height: 1.5;
+  color: var(--color-text);
 }
 
 .change-comparison {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-3);
 }
 
-.change-section h5 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.8rem;
-  color: var(--color-muted);
+.change-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
 }
 
-details {
-  margin-top: 0.5rem;
+.change-section-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-light);
 }
 
-summary {
-  cursor: pointer;
-  color: var(--color-primary);
-  font-weight: 500;
-}
-
-summary:hover {
-  text-decoration: underline;
-}
-
-.empty-state {
-  text-align: center;
-  color: var(--color-muted);
-  padding: 3rem;
-  font-style: italic;
-}
-
+/* Responsive Design */
 @media (max-width: 1024px) {
   .filters-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
-  
+
   .change-comparison {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .filters-section {
+    padding: var(--spacing-4);
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .changes-cell {
+    max-width: 100%;
   }
 }
 </style>

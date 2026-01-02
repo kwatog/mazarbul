@@ -1,4 +1,25 @@
 <script setup lang="ts">
+const config = useRuntimeConfig()
+const apiBase = config.public.apiBase
+const userInfo = useCookie('user_info')
+const { success, error: showError } = useToast()
+
+const decodeUserInfo = (value: string | null | object): any => {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    let b64 = String(value)
+    if (b64.startsWith('"') && b64.endsWith('"')) {
+      b64 = b64.slice(1, -1)
+    }
+    const json = decodeURIComponent(escape(atob(b64)))
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+const currentUser = decodeUserInfo(userInfo.value)
 
 interface Asset {
   id: number
@@ -25,15 +46,15 @@ interface Group {
   name: string
 }
 
-const userCookie = useCookie('user_info')
-const user = computed(() => userCookie.value)
-
 const items = ref<Asset[]>([])
 const wbsItems = ref<WBS[]>([])
 const groups = ref<Group[]>([])
+const loading = ref(true)
+const error = ref<string | null>(null)
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
+const selectedItem = ref<Asset | null>(null)
 
 const form = ref({
   wbs_id: 0,
@@ -44,23 +65,47 @@ const form = ref({
   status: 'Active'
 })
 
-const editingItem = ref<Asset | null>(null)
-
-// Filters
-const filterStatus = ref('')
-const filterWBS = ref(0)
-const filterAssetType = ref('')
+const filterStatus = ref<string | null>(null)
+const filterWBS = ref<number | null>(null)
+const filterAssetType = ref<string | null>(null)
 
 const statuses = ['Active', 'Inactive', 'Disposed', 'Under Maintenance']
 const assetTypes = ['CAPEX', 'OPEX', 'Lease']
 
+const statusOptions = computed(() =>
+  statuses.map(s => ({ value: s, label: s }))
+)
+
+const assetTypeOptions = computed(() =>
+  assetTypes.map(t => ({ value: t, label: t }))
+)
+
+const wbsOptions = computed(() =>
+  wbsItems.value.map(w => ({
+    value: w.id,
+    label: w.description ? `${w.wbs_code} - ${w.description}` : w.wbs_code
+  }))
+)
+
+const groupOptions = computed(() =>
+  groups.value.map(g => ({ value: g.id, label: g.name }))
+)
+
 // Fetch data
 const fetchItems = async () => {
   try {
+    loading.value = true
     const data = await useApiFetch('/assets', { method: 'GET' })
     items.value = data as Asset[]
+    error.value = null
   } catch (e: any) {
-    alert(`Failed to fetch assets: ${e.data?.detail || e.message}`)
+    console.error(e)
+    error.value = 'Failed to load assets.'
+    if (e.response?.status === 401) {
+      navigateTo('/login')
+    }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -77,15 +122,18 @@ const fetchGroups = async () => {
   try {
     const data = await useApiFetch('/groups', { method: 'GET' })
     groups.value = data as Group[]
+    if (groups.value.length > 0 && form.value.owner_group_id === 0) {
+      form.value.owner_group_id = groups.value[0].id
+    }
   } catch (e: any) {
     console.error('Failed to fetch groups:', e)
   }
 }
 
-onMounted(() => {
-  fetchItems()
-  fetchWBS()
-  fetchGroups()
+onMounted(async () => {
+  await fetchWBS()
+  await fetchGroups()
+  await fetchItems()
 })
 
 // Computed
@@ -112,55 +160,55 @@ const getGroupName = (id: number) => {
   return groups.value.find(g => g.id === id)?.name || 'Unknown'
 }
 
-const getStatusColor = (status?: string) => {
-  const colors: Record<string, string> = {
-    'Active': '#10b981',
-    'Inactive': '#6b7280',
-    'Disposed': '#ef4444',
-    'Under Maintenance': '#f59e0b'
+const getStatusVariant = (status?: string): 'success' | 'warning' | 'danger' | 'secondary' => {
+  const variants: Record<string, 'success' | 'warning' | 'danger' | 'secondary'> = {
+    'Active': 'success',
+    'Inactive': 'secondary',
+    'Disposed': 'danger',
+    'Under Maintenance': 'warning'
   }
-  return colors[status || 'Active'] || '#6b7280'
+  return variants[status || 'Active'] || 'secondary'
 }
 
-const getAssetTypeColor = (type?: string) => {
-  const colors: Record<string, string> = {
-    'CAPEX': '#8b5cf6',
-    'OPEX': '#3b82f6',
-    'Lease': '#10b981'
+const getAssetTypeVariant = (type?: string): 'primary' | 'info' | 'success' => {
+  const variants: Record<string, 'primary' | 'info' | 'success'> = {
+    'CAPEX': 'primary',
+    'OPEX': 'info',
+    'Lease': 'success'
   }
-  return colors[type || 'CAPEX'] || '#6b7280'
+  return variants[type || 'CAPEX'] || 'primary'
 }
 
 // Permissions
 const canEdit = (item: Asset) => {
-  if (!user.value) return false
-  if (user.value.role === 'Admin') return true
-  if (user.value.role === 'Manager') return true
-  return item.created_by === user.value.id
+  if (!currentUser) return false
+  if (['Admin', 'Manager'].includes(currentUser.role)) return true
+  return item.created_by === currentUser.id
 }
 
-const canDelete = (item: Asset) => {
-  if (!user.value) return false
-  if (user.value.role === 'Admin') return true
-  if (user.value.role === 'Manager') return true
-  return false
+const canDelete = () => {
+  return currentUser && ['Admin', 'Manager'].includes(currentUser.role)
 }
 
 // CRUD operations
-const openCreateModal = () => {
+const resetForm = () => {
   form.value = {
-    wbs_id: 0,
+    wbs_id: wbsItems.value[0]?.id || 0,
     asset_code: '',
     asset_type: 'CAPEX',
     description: '',
-    owner_group_id: 0,
+    owner_group_id: groups.value[0]?.id || 0,
     status: 'Active'
   }
+}
+
+const openCreateModal = () => {
+  resetForm()
   showCreateModal.value = true
 }
 
 const openEditModal = (item: Asset) => {
-  editingItem.value = item
+  selectedItem.value = item
   form.value = {
     wbs_id: item.wbs_id,
     asset_code: item.asset_code,
@@ -175,35 +223,41 @@ const openEditModal = (item: Asset) => {
 const closeModals = () => {
   showCreateModal.value = false
   showEditModal.value = false
-  editingItem.value = null
+  selectedItem.value = null
+  resetForm()
 }
 
 const createItem = async () => {
   try {
     if (!form.value.wbs_id) {
-      alert('Please select a WBS')
+      showError('Please select a WBS')
       return
     }
     if (!form.value.asset_code.trim()) {
-      alert('Asset Code is required')
+      showError('Asset Code is required')
       return
     }
 
+    loading.value = true
     await useApiFetch('/assets', {
       method: 'POST',
       body: form.value
     })
     await fetchItems()
     closeModals()
+    success('Asset created successfully!')
   } catch (e: any) {
-    alert(`Failed to create asset: ${e.data?.detail || e.message}`)
+    showError(`Failed to create asset: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
 
 const updateItem = async () => {
-  if (!editingItem.value) return
+  if (!selectedItem.value) return
   try {
-    await useApiFetch(`/assets/${editingItem.value.id}`, {
+    loading.value = true
+    await useApiFetch(`/assets/${selectedItem.value.id}`, {
       method: 'PUT',
       body: {
         asset_code: form.value.asset_code,
@@ -214,196 +268,322 @@ const updateItem = async () => {
     })
     await fetchItems()
     closeModals()
+    success('Asset updated successfully!')
   } catch (e: any) {
-    alert(`Failed to update asset: ${e.data?.detail || e.message}`)
+    showError(`Failed to update asset: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
 
 const deleteItem = async (item: Asset) => {
-  if (!confirm(`Are you sure you want to delete asset "${item.asset_code}"?`)) return
+  if (!confirm(`Are you sure you want to delete asset "${item.asset_code}"?`)) {
+    return
+  }
   try {
+    loading.value = true
     await useApiFetch(`/assets/${item.id}`, { method: 'DELETE' })
     await fetchItems()
+    success('Asset deleted successfully!')
   } catch (e: any) {
-    alert(`Failed to delete asset: ${e.data?.detail || e.message}`)
+    showError(`Failed to delete asset: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
+
+const tableColumns = [
+  { key: 'asset_code', label: 'Asset Code', sortable: true },
+  { key: 'wbs', label: 'WBS', sortable: false },
+  { key: 'asset_type', label: 'Type', sortable: true, align: 'center' as const },
+  { key: 'description', label: 'Description', sortable: false },
+  { key: 'owner_group', label: 'Owner Group', sortable: false },
+  { key: 'status', label: 'Status', sortable: true, align: 'center' as const },
+  { key: 'created_by', label: 'Created By', sortable: false },
+  { key: 'actions', label: 'Actions', sortable: false }
+]
 </script>
 
 <template>
-  <div class="page-container">
-    <div class="page-header">
-      <h1>Assets</h1>
-      <button @click="openCreateModal" class="btn-primary">+ Create Asset</button>
+  <BaseCard title="Assets" subtitle="Manage asset inventory and tracking">
+    <template #header>
+      <div class="header-actions">
+        <BaseButton variant="primary" @click="openCreateModal">
+          + Create Asset
+        </BaseButton>
+      </div>
+    </template>
+
+    <div class="filters">
+      <BaseSelect
+        v-model="filterStatus"
+        :options="[{ value: null, label: 'All Statuses' }, ...statusOptions]"
+        label="Status"
+        @change="fetchItems"
+      />
+      <BaseSelect
+        v-model="filterWBS"
+        :options="[{ value: null, label: 'All WBS' }, ...wbsOptions]"
+        label="WBS"
+        @change="fetchItems"
+      />
+      <BaseSelect
+        v-model="filterAssetType"
+        :options="[{ value: null, label: 'All Types' }, ...assetTypeOptions]"
+        label="Asset Type"
+        @change="fetchItems"
+      />
     </div>
 
-    <!-- Filters -->
-    <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-      <div style="flex: 1; min-width: 200px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Status</label>
-        <select v-model="filterStatus" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">All Statuses</option>
-          <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 200px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">WBS</label>
-        <select v-model.number="filterWBS" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-          <option :value="0">All WBS</option>
-          <option v-for="w in wbsItems" :key="w.id" :value="w.id">{{ w.wbs_code }}</option>
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 200px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Asset Type</label>
-        <select v-model="filterAssetType" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">All Types</option>
-          <option v-for="t in assetTypes" :key="t" :value="t">{{ t }}</option>
-        </select>
-      </div>
+    <div v-if="loading" class="loading-state">
+      <LoadingSpinner size="lg" label="Loading assets..." />
     </div>
 
-    <!-- List -->
-    <div v-if="filteredItems.length === 0" class="empty-state">
-      <p>No assets found</p>
-      <button @click="openCreateModal" class="btn-primary">Create First Asset</button>
-    </div>
+    <p v-else-if="error" class="error-message" role="alert">{{ error }}</p>
 
-    <div v-else class="table-container">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Asset Code</th>
-            <th>WBS</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Owner Group</th>
-            <th>Status</th>
-            <th>Created By</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in filteredItems" :key="item.id">
-            <td><strong>{{ item.asset_code }}</strong></td>
-            <td>{{ getWBSCode(item.wbs_id) }}</td>
-            <td>
-              <span class="badge" :style="{ backgroundColor: getAssetTypeColor(item.asset_type) }">
-                {{ item.asset_type || 'CAPEX' }}
-              </span>
-            </td>
-            <td>{{ item.description || '-' }}</td>
-            <td>{{ getGroupName(item.owner_group_id) }}</td>
-            <td>
-              <span class="badge" :style="{ backgroundColor: getStatusColor(item.status) }">
-                {{ item.status || 'Active' }}
-              </span>
-            </td>
-            <td>User #{{ item.created_by }}</td>
-            <td>
-              <div style="display: flex; gap: 0.5rem;">
-                <button v-if="canEdit(item)" @click="openEditModal(item)" class="btn-sm">Edit</button>
-                <button v-if="canDelete(item)" @click="deleteItem(item)" class="btn-sm btn-danger">Delete</button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <EmptyState
+      v-else-if="filteredItems.length === 0"
+      title="No assets found"
+      description="Click 'Create Asset' to add your first asset."
+      action-text="Create Asset"
+      @action="openCreateModal"
+    />
 
-    <!-- Create Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="closeModals">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Create Asset</h2>
-          <button @click="closeModals" class="btn-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>WBS *</label>
-            <select v-model.number="form.wbs_id" required>
-              <option :value="0" disabled>Select a WBS</option>
-              <option v-for="w in wbsItems" :key="w.id" :value="w.id">
-                {{ w.wbs_code }}{{ w.description ? ' - ' + w.description : '' }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Asset Code *</label>
-            <input v-model="form.asset_code" type="text" placeholder="e.g., ASSET-2025-001" required />
-          </div>
-          <div class="form-group">
-            <label>Asset Type</label>
-            <select v-model="form.asset_type">
-              <option v-for="t in assetTypes" :key="t" :value="t">{{ t }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Description</label>
-            <textarea v-model="form.description" rows="3" placeholder="Optional description"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Status</label>
-            <select v-model="form.status">
-              <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <p style="font-size: 0.85rem; color: #666; margin: 0;">
-              <strong>Note:</strong> Owner Group will be automatically inherited from the selected WBS.
-            </p>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="createItem" class="btn-primary">Create</button>
-        </div>
-      </div>
-    </div>
+    <BaseTable
+      v-else
+      :columns="tableColumns"
+      :data="filteredItems"
+      :loading="loading"
+      selectable
+      sticky-header
+      empty-message="No assets found"
+      @row-click="openEditModal"
+    >
+      <template #cell-asset_code="{ value }">
+        <code class="asset-code">{{ value }}</code>
+      </template>
 
-    <!-- Edit Modal -->
-    <div v-if="showEditModal" class="modal-overlay" @click.self="closeModals">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Edit Asset</h2>
-          <button @click="closeModals" class="btn-close">&times;</button>
+      <template #cell-wbs="{ row }">
+        {{ getWBSCode(row.wbs_id) }}
+      </template>
+
+      <template #cell-asset_type="{ value }">
+        <BaseBadge :variant="getAssetTypeVariant(value)" size="sm">
+          {{ value || 'CAPEX' }}
+        </BaseBadge>
+      </template>
+
+      <template #cell-description="{ value }">
+        <span class="description">{{ value || '-' }}</span>
+      </template>
+
+      <template #cell-owner_group="{ row }">
+        <BaseBadge variant="secondary" size="sm">
+          {{ getGroupName(row.owner_group_id) }}
+        </BaseBadge>
+      </template>
+
+      <template #cell-status="{ value }">
+        <BaseBadge :variant="getStatusVariant(value)" size="sm">
+          {{ value || 'Active' }}
+        </BaseBadge>
+      </template>
+
+      <template #cell-created_by="{ value }">
+        User #{{ value }}
+      </template>
+
+      <template #cell-actions="{ row }">
+        <div class="action-buttons" v-if="canEdit(row) || canDelete()">
+          <BaseButton
+            v-if="canEdit(row)"
+            size="sm"
+            variant="secondary"
+            @click="openEditModal(row)"
+          >
+            Edit
+          </BaseButton>
+          <BaseButton
+            v-if="canDelete()"
+            size="sm"
+            variant="danger"
+            @click="deleteItem(row)"
+          >
+            Delete
+          </BaseButton>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>WBS</label>
-            <input :value="getWBSCode(form.wbs_id)" type="text" disabled />
-            <p style="font-size: 0.85rem; color: #666; margin: 0.25rem 0 0 0;">Cannot change parent entity</p>
-          </div>
-          <div class="form-group">
-            <label>Asset Code *</label>
-            <input v-model="form.asset_code" type="text" required />
-          </div>
-          <div class="form-group">
-            <label>Asset Type</label>
-            <select v-model="form.asset_type">
-              <option v-for="t in assetTypes" :key="t" :value="t">{{ t }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Description</label>
-            <textarea v-model="form.description" rows="3"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Status</label>
-            <select v-model="form.status">
-              <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Owner Group (Inherited)</label>
-            <input :value="getGroupName(form.owner_group_id)" type="text" disabled />
-            <p style="font-size: 0.85rem; color: #666; margin: 0.25rem 0 0 0;">Inherited from parent WBS</p>
-          </div>
+      </template>
+    </BaseTable>
+
+    <BaseModal v-model="showCreateModal" title="Create Asset" size="lg">
+      <form @submit.prevent="createItem">
+        <BaseSelect
+          v-model="form.wbs_id"
+          :options="wbsOptions"
+          label="WBS"
+          required
+          help-text="Select the Work Breakdown Structure this asset belongs to"
+        />
+
+        <BaseInput
+          v-model="form.asset_code"
+          label="Asset Code"
+          placeholder="e.g., ASSET-2025-001"
+          required
+        />
+
+        <BaseSelect
+          v-model="form.asset_type"
+          :options="assetTypeOptions"
+          label="Asset Type"
+          required
+        />
+
+        <BaseTextarea
+          v-model="form.description"
+          label="Description"
+          placeholder="Optional description"
+          rows="3"
+        />
+
+        <BaseSelect
+          v-model="form.status"
+          :options="statusOptions"
+          label="Status"
+          required
+        />
+
+        <div class="form-note">
+          <p>Owner Group will be automatically inherited from the selected WBS.</p>
         </div>
-        <div class="modal-footer">
-          <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="updateItem" class="btn-primary">Update</button>
-        </div>
-      </div>
-    </div>
-  </div>
+      </form>
+
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="loading" @click="closeModals">
+          Cancel
+        </BaseButton>
+        <BaseButton variant="primary" :loading="loading" @click="createItem">
+          Create Asset
+        </BaseButton>
+      </template>
+    </BaseModal>
+
+    <BaseModal v-model="showEditModal" title="Edit Asset" size="lg">
+      <form @submit.prevent="updateItem">
+        <BaseInput
+          :model-value="getWBSCode(form.wbs_id)"
+          label="WBS"
+          disabled
+          help-text="Cannot change parent entity"
+        />
+
+        <BaseInput
+          v-model="form.asset_code"
+          label="Asset Code"
+          required
+        />
+
+        <BaseSelect
+          v-model="form.asset_type"
+          :options="assetTypeOptions"
+          label="Asset Type"
+          required
+        />
+
+        <BaseTextarea
+          v-model="form.description"
+          label="Description"
+          rows="3"
+        />
+
+        <BaseSelect
+          v-model="form.status"
+          :options="statusOptions"
+          label="Status"
+          required
+        />
+
+        <BaseInput
+          :model-value="getGroupName(form.owner_group_id)"
+          label="Owner Group (Inherited)"
+          disabled
+          help-text="Inherited from parent WBS"
+        />
+      </form>
+
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="loading" @click="closeModals">
+          Cancel
+        </BaseButton>
+        <BaseButton variant="primary" :loading="loading" @click="updateItem">
+          Save Changes
+        </BaseButton>
+      </template>
+    </BaseModal>
+  </BaseCard>
 </template>
+
+<style scoped>
+.header-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.filters {
+  display: flex;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-lg);
+}
+
+.loading-state {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-12);
+}
+
+.error-message {
+  color: var(--color-error);
+  padding: var(--spacing-4);
+  text-align: center;
+}
+
+.asset-code {
+  font-family: monospace;
+  background: var(--color-gray-100);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.description {
+  font-size: var(--text-sm);
+  color: var(--color-gray-500);
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.form-note {
+  padding: var(--spacing-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-gray-600);
+}
+
+.form-note p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .filters {
+    flex-direction: column;
+  }
+}
+</style>

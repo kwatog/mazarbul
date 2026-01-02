@@ -59,18 +59,44 @@ def user_in_owner_group(user: "models.User", owner_group_id: int, db: Session, r
 def check_business_case_access(user: "models.User", business_case: "models.BusinessCase", db: Session, required_level: str = "Read") -> bool:
     """
     Hybrid BusinessCase access control:
-    1. Creator access (fallback): Creator has Read always, Write for Draft only
+    1. Creator access (audit only): Creator has Read always, NOT Write
     2. Line-item based access (PRIMARY): Access via budget items linked through line items
-    3. Explicit RecordAccess (OVERRIDE): Direct grants for audits/reviews
+    3. lead_group_id access: If BC has lead_group_id, user must be member for Write access
+    4. Explicit RecordAccess (OVERRIDE): Direct grants for audits/reviews
     """
-    # 1. Creator access (fallback)
+    access_levels = {"Read": 0, "Write": 1, "Full": 2}
+    user_group_ids = [
+        m.group_id
+        for m in db.query(models.UserGroupMembership).filter(
+            models.UserGroupMembership.user_id == user.id
+        ).all()
+    ]
+
+    # 1. Creator access (audit only - Read only, not Write)
     if business_case.created_by == user.id:
         if required_level == "Read":
             return True
-        elif required_level in ["Write", "Full"] and business_case.status == "Draft":
-            return True
+        # Creator does NOT get Write access - they must have access via line items or explicit grants
 
-    # 2. Line-item based access (PRIMARY - per spec)
+    # 2. lead_group_id enforcement for Write access
+    if required_level in ["Write", "Full"] and business_case.lead_group_id:
+        if required_level == "Write" and user_in_owner_group(user, business_case.lead_group_id, db, required_level):
+            return True
+        # Not a member - check explicit access
+        bc_access = db.query(models.RecordAccess).filter(
+            models.RecordAccess.record_type == "BusinessCase",
+            models.RecordAccess.record_id == business_case.id,
+            (
+                (models.RecordAccess.user_id == user.id) |
+                (models.RecordAccess.group_id.in_(user_group_ids))
+            ),
+            (models.RecordAccess.expires_at.is_(None)) | (models.RecordAccess.expires_at > datetime.utcnow().isoformat())
+        ).first()
+
+        if not bc_access or access_levels.get(bc_access.access_level, 0) < access_levels.get(required_level, 2):
+            return False
+
+    # 3. Line-item based access (PRIMARY - per spec)
     for line_item in business_case.line_items:
         budget_item = line_item.budget_item
         if budget_item and budget_item.owner_group_id:
@@ -81,25 +107,29 @@ def check_business_case_access(user: "models.User", business_case: "models.Busin
         budget_access = db.query(models.RecordAccess).filter(
             models.RecordAccess.record_type == "BudgetItem",
             models.RecordAccess.record_id == budget_item.id,
-            models.RecordAccess.user_id == user.id,
+            (
+                (models.RecordAccess.user_id == user.id) |
+                (models.RecordAccess.group_id.in_(user_group_ids))
+            ),
             (models.RecordAccess.expires_at.is_(None)) | (models.RecordAccess.expires_at > datetime.utcnow().isoformat())
         ).first()
 
         if budget_access:
-            access_levels = {"Read": 0, "Write": 1, "Full": 2}
             if access_levels.get(budget_access.access_level, 0) >= access_levels.get(required_level, 2):
                 return True
 
-    # 3. Explicit BC access (OVERRIDE)
+    # 4. Explicit BC access (OVERRIDE)
     bc_access = db.query(models.RecordAccess).filter(
         models.RecordAccess.record_type == "BusinessCase",
         models.RecordAccess.record_id == business_case.id,
-        models.RecordAccess.user_id == user.id,
+        (
+            (models.RecordAccess.user_id == user.id) |
+            (models.RecordAccess.group_id.in_(user_group_ids))
+        ),
         (models.RecordAccess.expires_at.is_(None)) | (models.RecordAccess.expires_at > datetime.utcnow().isoformat())
     ).first()
 
     if bc_access:
-        access_levels = {"Read": 0, "Write": 1, "Full": 2}
         if access_levels.get(bc_access.access_level, 0) >= access_levels.get(required_level, 2):
             return True
 
@@ -206,6 +236,14 @@ def check_record_access(record_type: str, record_id_param: str, required_access:
         if current_user.role == "Manager":
             return current_user
 
+        access_levels = {"Read": 0, "Write": 1, "Full": 2}
+        role_caps = {"Viewer": 0, "User": 1, "Manager": 2, "Admin": 2}
+        if access_levels.get(required_access, 2) > role_caps.get(current_user.role, 0):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions"
+            )
+
         # Fetch the record to check owner_group_id and creator
         model_cls = getattr(models, record_type, None)
         record = None
@@ -222,7 +260,6 @@ def check_record_access(record_type: str, record_id_param: str, required_access:
                     return current_user
 
         # Check explicit record access grants
-        access_levels = {"Read": 0, "Write": 1, "Full": 2}
         req_level_val = access_levels.get(required_access, 2)
         
         # Check direct user access

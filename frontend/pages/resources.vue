@@ -1,4 +1,25 @@
 <script setup lang="ts">
+const config = useRuntimeConfig()
+const apiBase = config.public.apiBase
+const userInfo = useCookie('user_info')
+const { success, error: showError } = useToast()
+
+const decodeUserInfo = (value: string | null | object): any => {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    let b64 = String(value)
+    if (b64.startsWith('"') && b64.endsWith('"')) {
+      b64 = b64.slice(1, -1)
+    }
+    const json = decodeURIComponent(escape(atob(b64)))
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+const currentUser = decodeUserInfo(userInfo.value)
 
 interface Resource {
   id: number
@@ -7,7 +28,7 @@ interface Resource {
   role?: string
   start_date?: string
   end_date?: string
-  cost_per_month?: string  // Changed from number for Decimal precision
+  cost_per_month?: string
   owner_group_id: number
   status?: string
   created_by?: number
@@ -16,19 +37,24 @@ interface Resource {
   updated_at?: string
 }
 
-interface Group {
+interface UserGroup {
   id: number
   name: string
+  description?: string
 }
 
-const userCookie = useCookie('user_info')
-const user = computed(() => userCookie.value)
-
 const items = ref<Resource[]>([])
-const groups = ref<Group[]>([])
+const groups = ref<UserGroup[]>([])
+const loading = ref(true)
+const error = ref<string | null>(null)
+
+const filterStatus = ref<string | null>(null)
+const filterVendor = ref('')
+const filterOwnerGroup = ref<number | null>(null)
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
+const selectedItem = ref<Resource | null>(null)
 
 const form = ref({
   name: '',
@@ -41,40 +67,45 @@ const form = ref({
   status: 'Active'
 })
 
-const editingItem = ref<Resource | null>(null)
-
-// Filters
-const filterStatus = ref('')
-const filterVendor = ref('')
-const filterOwnerGroup = ref(0)
-
 const statuses = ['Active', 'Inactive', 'On Leave', 'Terminated']
 
-// Fetch data
-const fetchItems = async () => {
-  try {
-    const data = await useApiFetch('/resources', { method: 'GET' })
-    items.value = data as Resource[]
-  } catch (e: any) {
-    alert(`Failed to fetch resources: ${e.data?.detail || e.message}`)
-  }
-}
+const statusOptions = computed(() =>
+  statuses.map(s => ({ value: s, label: s }))
+)
+
+const groupOptions = computed(() =>
+  groups.value.map(g => ({ value: g.id, label: g.name }))
+)
 
 const fetchGroups = async () => {
   try {
-    const data = await useApiFetch('/groups', { method: 'GET' })
-    groups.value = data as Group[]
+    const res = await useApiFetch<UserGroup[]>('/user-groups')
+    groups.value = res as any
+    if (groups.value.length > 0 && form.value.owner_group_id === 0) {
+      form.value.owner_group_id = groups.value[0].id
+    }
   } catch (e: any) {
-    console.error('Failed to fetch groups:', e)
+    console.error('Failed to load groups:', e)
   }
 }
 
-onMounted(() => {
-  fetchItems()
-  fetchGroups()
-})
+const fetchItems = async () => {
+  try {
+    loading.value = true
+    const data = await useApiFetch('/resources', { method: 'GET' })
+    items.value = data as Resource[]
+    error.value = null
+  } catch (e: any) {
+    console.error(e)
+    error.value = 'Failed to load resources.'
+    if (e.response?.status === 401) {
+      navigateTo('/login')
+    }
+  } finally {
+    loading.value = false
+  }
+}
 
-// Computed
 const filteredItems = computed(() => {
   let result = items.value
   if (filterStatus.value) {
@@ -91,19 +122,18 @@ const filteredItems = computed(() => {
   return result
 })
 
-// Helpers
 const getGroupName = (id: number) => {
   return groups.value.find(g => g.id === id)?.name || 'Unknown'
 }
 
-const getStatusColor = (status?: string) => {
-  const colors: Record<string, string> = {
-    'Active': '#10b981',
-    'Inactive': '#6b7280',
-    'On Leave': '#f59e0b',
-    'Terminated': '#ef4444'
+const getStatusVariant = (status?: string): 'success' | 'warning' | 'danger' | 'secondary' => {
+  const variants: Record<string, 'success' | 'warning' | 'danger' | 'secondary'> = {
+    'Active': 'success',
+    'Inactive': 'secondary',
+    'On Leave': 'warning',
+    'Terminated': 'danger'
   }
-  return colors[status || 'Active'] || '#6b7280'
+  return variants[status || 'Active'] || 'secondary'
 }
 
 const formatCurrency = (amount?: string | number) => {
@@ -120,28 +150,21 @@ const formatDate = (dateStr?: string) => {
   return new Date(dateStr).toLocaleDateString()
 }
 
-// Permissions
 const canEdit = (item: Resource) => {
-  if (!user.value) return false
-  if (user.value.role === 'Admin') return true
-  if (user.value.role === 'Manager') return true
-  return item.created_by === user.value.id
+  if (!currentUser) return false
+  if (['Admin', 'Manager'].includes(currentUser.role)) return true
+  return item.created_by === currentUser.id
 }
 
-const canDelete = (item: Resource) => {
-  if (!user.value) return false
-  if (user.value.role === 'Admin') return true
-  if (user.value.role === 'Manager') return true
-  return false
+const canDelete = () => {
+  return currentUser && ['Admin', 'Manager'].includes(currentUser.role)
 }
 
 const canCreate = computed(() => {
-  if (!user.value) return false
-  return ['Admin', 'Manager'].includes(user.value.role)
+  return currentUser && ['Admin', 'Manager'].includes(currentUser.role)
 })
 
-// CRUD operations
-const openCreateModal = () => {
+const resetForm = () => {
   form.value = {
     name: '',
     vendor: '',
@@ -149,21 +172,25 @@ const openCreateModal = () => {
     start_date: '',
     end_date: '',
     cost_per_month: '',
-    owner_group_id: 0,
+    owner_group_id: groups.value[0]?.id || 0,
     status: 'Active'
   }
+}
+
+const openCreateModal = () => {
+  resetForm()
   showCreateModal.value = true
 }
 
 const openEditModal = (item: Resource) => {
-  editingItem.value = item
+  selectedItem.value = item
   form.value = {
     name: item.name,
     vendor: item.vendor || '',
     role: item.role || '',
     start_date: item.start_date || '',
     end_date: item.end_date || '',
-    cost_per_month: item.cost_per_month || 0,
+    cost_per_month: item.cost_per_month || '',
     owner_group_id: item.owner_group_id,
     status: item.status || 'Active'
   }
@@ -173,35 +200,41 @@ const openEditModal = (item: Resource) => {
 const closeModals = () => {
   showCreateModal.value = false
   showEditModal.value = false
-  editingItem.value = null
+  selectedItem.value = null
+  resetForm()
 }
 
 const createItem = async () => {
   try {
     if (!form.value.name.trim()) {
-      alert('Name is required')
+      showError('Name is required')
       return
     }
     if (!form.value.owner_group_id) {
-      alert('Please select an owner group')
+      showError('Please select an owner group')
       return
     }
 
+    loading.value = true
     await useApiFetch('/resources', {
       method: 'POST',
       body: form.value
     })
     await fetchItems()
     closeModals()
+    success('Resource created successfully!')
   } catch (e: any) {
-    alert(`Failed to create resource: ${e.data?.detail || e.message}`)
+    showError(`Failed to create resource: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
 
 const updateItem = async () => {
-  if (!editingItem.value) return
+  if (!selectedItem.value) return
   try {
-    await useApiFetch(`/resources/${editingItem.value.id}`, {
+    loading.value = true
+    await useApiFetch(`/resources/${selectedItem.value.id}`, {
       method: 'PUT',
       body: {
         name: form.value.name,
@@ -215,211 +248,333 @@ const updateItem = async () => {
     })
     await fetchItems()
     closeModals()
+    success('Resource updated successfully!')
   } catch (e: any) {
-    alert(`Failed to update resource: ${e.data?.detail || e.message}`)
+    showError(`Failed to update resource: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
 
 const deleteItem = async (item: Resource) => {
-  if (!confirm(`Are you sure you want to delete resource "${item.name}"?`)) return
+  if (!confirm(`Are you sure you want to delete resource "${item.name}"?`)) {
+    return
+  }
   try {
+    loading.value = true
     await useApiFetch(`/resources/${item.id}`, { method: 'DELETE' })
     await fetchItems()
+    success('Resource deleted successfully!')
   } catch (e: any) {
-    alert(`Failed to delete resource: ${e.data?.detail || e.message}`)
+    showError(`Failed to delete resource: ${e.data?.detail || e.message}`)
+  } finally {
+    loading.value = false
   }
 }
+
+const tableColumns = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'vendor', label: 'Vendor', sortable: true },
+  { key: 'role', label: 'Role', sortable: true },
+  { key: 'start_date', label: 'Start Date', sortable: true, align: 'center' as const },
+  { key: 'end_date', label: 'End Date', sortable: true, align: 'center' as const },
+  { key: 'cost_per_month', label: 'Cost/Month', sortable: true, align: 'right' as const },
+  { key: 'owner_group', label: 'Owner Group', sortable: false },
+  { key: 'status', label: 'Status', sortable: true, align: 'center' as const },
+  { key: 'actions', label: 'Actions', sortable: false }
+]
+
+onMounted(async () => {
+  await fetchGroups()
+  await fetchItems()
+})
 </script>
 
 <template>
-  <div class="page-container">
-    <div class="page-header">
-      <h1>Resources</h1>
-      <button v-if="canCreate" @click="openCreateModal" class="btn-primary">+ Create Resource</button>
+  <BaseCard title="Resources" subtitle="Manage team members and contractors">
+    <template #header>
+      <div class="header-actions">
+        <BaseButton v-if="canCreate" variant="primary" @click="openCreateModal">
+          + Create Resource
+        </BaseButton>
+      </div>
+    </template>
+
+    <div class="filters">
+      <BaseSelect
+        v-model="filterStatus"
+        :options="[{ value: null, label: 'All Statuses' }, ...statusOptions]"
+        label="Status"
+      />
+      <BaseInput
+        v-model="filterVendor"
+        label="Vendor"
+        placeholder="Search vendor..."
+      />
+      <BaseSelect
+        v-model="filterOwnerGroup"
+        :options="[{ value: null, label: 'All Groups' }, ...groupOptions]"
+        label="Owner Group"
+      />
     </div>
 
-    <!-- Filters -->
-    <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-      <div style="flex: 1; min-width: 200px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Status</label>
-        <select v-model="filterStatus" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-          <option value="">All Statuses</option>
-          <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-        </select>
-      </div>
-      <div style="flex: 1; min-width: 200px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Vendor</label>
-        <input v-model="filterVendor" type="text" placeholder="Search vendor..." style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" />
-      </div>
-      <div style="flex: 1; min-width: 200px;">
-        <label style="display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #666;">Owner Group</label>
-        <select v-model.number="filterOwnerGroup" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-          <option :value="0">All Groups</option>
-          <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-        </select>
-      </div>
+    <div v-if="loading" class="loading-state">
+      <LoadingSpinner size="lg" label="Loading resources..." />
     </div>
 
-    <!-- List -->
-    <div v-if="filteredItems.length === 0" class="empty-state">
-      <p>No resources found</p>
-      <button v-if="canCreate" @click="openCreateModal" class="btn-primary">Create First Resource</button>
-    </div>
+    <p v-else-if="error" class="error-message" role="alert">{{ error }}</p>
 
-    <div v-else class="table-container">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Vendor</th>
-            <th>Role</th>
-            <th>Start Date</th>
-            <th>End Date</th>
-            <th>Cost/Month</th>
-            <th>Owner Group</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in filteredItems" :key="item.id">
-            <td><strong>{{ item.name }}</strong></td>
-            <td>{{ item.vendor || '-' }}</td>
-            <td>{{ item.role || '-' }}</td>
-            <td>{{ formatDate(item.start_date) }}</td>
-            <td>{{ formatDate(item.end_date) }}</td>
-            <td>{{ formatCurrency(item.cost_per_month) }}</td>
-            <td>{{ getGroupName(item.owner_group_id) }}</td>
-            <td>
-              <span class="badge" :style="{ backgroundColor: getStatusColor(item.status) }">
-                {{ item.status || 'Active' }}
-              </span>
-            </td>
-            <td>
-              <div style="display: flex; gap: 0.5rem;">
-                <button v-if="canEdit(item)" @click="openEditModal(item)" class="btn-sm">Edit</button>
-                <button v-if="canDelete(item)" @click="deleteItem(item)" class="btn-sm btn-danger">Delete</button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <EmptyState
+      v-else-if="filteredItems.length === 0"
+      title="No resources found"
+      description="Click 'Create Resource' to add your first team member or contractor."
+      :action-text="canCreate ? 'Create Resource' : undefined"
+      @action="openCreateModal"
+    />
 
-    <!-- Create Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="closeModals">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Create Resource</h2>
-          <button @click="closeModals" class="btn-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Name *</label>
-            <input v-model="form.name" type="text" placeholder="Resource name" required />
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Vendor</label>
-              <input v-model="form.vendor" type="text" placeholder="Vendor/company name" />
-            </div>
-            <div class="form-group">
-              <label>Role</label>
-              <input v-model="form.role" type="text" placeholder="e.g., Developer, Consultant" />
-            </div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Start Date</label>
-              <input v-model="form.start_date" type="date" />
-            </div>
-            <div class="form-group">
-              <label>End Date</label>
-              <input v-model="form.end_date" type="date" />
-            </div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Cost per Month (USD)</label>
-              <input v-model="form.cost_per_month" type="text" step="0.01" min="0" />
-            </div>
-            <div class="form-group">
-              <label>Status</label>
-              <select v-model="form.status">
-                <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Owner Group *</label>
-            <select v-model.number="form.owner_group_id" required>
-              <option :value="0" disabled>Select an owner group</option>
-              <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="createItem" class="btn-primary">Create</button>
-        </div>
-      </div>
-    </div>
+    <BaseTable
+      v-else
+      :columns="tableColumns"
+      :data="filteredItems"
+      :loading="loading"
+      selectable
+      sticky-header
+      empty-message="No resources found"
+      @row-click="openEditModal"
+    >
+      <template #cell-name="{ value }">
+        <strong>{{ value }}</strong>
+      </template>
 
-    <!-- Edit Modal -->
-    <div v-if="showEditModal" class="modal-overlay" @click.self="closeModals">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Edit Resource</h2>
-          <button @click="closeModals" class="btn-close">&times;</button>
+      <template #cell-vendor="{ value }">
+        {{ value || '-' }}
+      </template>
+
+      <template #cell-role="{ value }">
+        {{ value || '-' }}
+      </template>
+
+      <template #cell-start_date="{ value }">
+        {{ formatDate(value) }}
+      </template>
+
+      <template #cell-end_date="{ value }">
+        {{ formatDate(value) }}
+      </template>
+
+      <template #cell-cost_per_month="{ value }">
+        {{ formatCurrency(value) }}
+      </template>
+
+      <template #cell-owner_group="{ row }">
+        <BaseBadge variant="primary" size="sm">{{ getGroupName(row.owner_group_id) }}</BaseBadge>
+      </template>
+
+      <template #cell-status="{ value }">
+        <BaseBadge :variant="getStatusVariant(value)" size="sm">{{ value || 'Active' }}</BaseBadge>
+      </template>
+
+      <template #cell-actions="{ row }">
+        <div class="action-buttons" v-if="canEdit(row) || canDelete()">
+          <BaseButton
+            v-if="canEdit(row)"
+            size="sm"
+            variant="secondary"
+            @click.stop="openEditModal(row)"
+          >
+            Edit
+          </BaseButton>
+          <BaseButton
+            v-if="canDelete()"
+            size="sm"
+            variant="danger"
+            @click.stop="deleteItem(row)"
+          >
+            Delete
+          </BaseButton>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Name *</label>
-            <input v-model="form.name" type="text" required />
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Vendor</label>
-              <input v-model="form.vendor" type="text" />
-            </div>
-            <div class="form-group">
-              <label>Role</label>
-              <input v-model="form.role" type="text" />
-            </div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Start Date</label>
-              <input v-model="form.start_date" type="date" />
-            </div>
-            <div class="form-group">
-              <label>End Date</label>
-              <input v-model="form.end_date" type="date" />
-            </div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label>Cost per Month (USD)</label>
-              <input v-model="form.cost_per_month" type="text" step="0.01" min="0" />
-            </div>
-            <div class="form-group">
-              <label>Status</label>
-              <select v-model="form.status">
-                <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Owner Group</label>
-            <input :value="getGroupName(form.owner_group_id)" type="text" disabled />
-            <p style="font-size: 0.85rem; color: #666; margin: 0.25rem 0 0 0;">Cannot change owner group after creation</p>
-          </div>
+      </template>
+    </BaseTable>
+
+    <BaseModal v-model="showCreateModal" title="Create Resource" size="lg">
+      <form @submit.prevent="createItem">
+        <BaseInput
+          v-model="form.name"
+          label="Name"
+          placeholder="e.g., John Doe"
+          required
+        />
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.vendor"
+            label="Vendor"
+            placeholder="Vendor/company name"
+          />
+          <BaseInput
+            v-model="form.role"
+            label="Role"
+            placeholder="e.g., Developer, Consultant"
+          />
         </div>
-        <div class="modal-footer">
-          <button @click="closeModals" class="btn-secondary">Cancel</button>
-          <button @click="updateItem" class="btn-primary">Update</button>
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.start_date"
+            label="Start Date"
+            type="date"
+          />
+          <BaseInput
+            v-model="form.end_date"
+            label="End Date"
+            type="date"
+          />
         </div>
-      </div>
-    </div>
-  </div>
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.cost_per_month"
+            label="Cost per Month (USD)"
+            placeholder="0.00"
+            type="text"
+          />
+          <BaseSelect
+            v-model="form.status"
+            :options="statusOptions"
+            label="Status"
+            required
+          />
+        </div>
+
+        <BaseSelect
+          v-model="form.owner_group_id"
+          :options="groupOptions"
+          label="Owner Group"
+          required
+        />
+      </form>
+
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="loading" @click="closeModals">
+          Cancel
+        </BaseButton>
+        <BaseButton variant="primary" :loading="loading" @click="createItem">
+          Create Resource
+        </BaseButton>
+      </template>
+    </BaseModal>
+
+    <BaseModal v-model="showEditModal" title="Edit Resource" size="lg">
+      <form @submit.prevent="updateItem">
+        <BaseInput
+          v-model="form.name"
+          label="Name"
+          required
+        />
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.vendor"
+            label="Vendor"
+          />
+          <BaseInput
+            v-model="form.role"
+            label="Role"
+          />
+        </div>
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.start_date"
+            label="Start Date"
+            type="date"
+          />
+          <BaseInput
+            v-model="form.end_date"
+            label="End Date"
+            type="date"
+          />
+        </div>
+
+        <div class="form-row">
+          <BaseInput
+            v-model="form.cost_per_month"
+            label="Cost per Month (USD)"
+            type="text"
+          />
+          <BaseSelect
+            v-model="form.status"
+            :options="statusOptions"
+            label="Status"
+            required
+          />
+        </div>
+
+        <BaseInput
+          :model-value="getGroupName(form.owner_group_id)"
+          label="Owner Group"
+          disabled
+          help-text="Owner group cannot be changed after creation"
+        />
+      </form>
+
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="loading" @click="closeModals">
+          Cancel
+        </BaseButton>
+        <BaseButton variant="primary" :loading="loading" @click="updateItem">
+          Save Changes
+        </BaseButton>
+      </template>
+    </BaseModal>
+  </BaseCard>
 </template>
+
+<style scoped>
+.header-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.filters {
+  display: flex;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+  padding: var(--spacing-4);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-lg);
+}
+
+.loading-state {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-12);
+}
+
+.error-message {
+  color: var(--color-error);
+  padding: var(--spacing-4);
+  text-align: center;
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-4);
+}
+
+@media (max-width: 640px) {
+  .filters {
+    flex-direction: column;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

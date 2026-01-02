@@ -10,12 +10,13 @@ Ebrose is an enterprise-grade procurement and budget tracking system built with 
 ├─────────────────────────────────────────────────────────────────┤
 │  Frontend (Nuxt 4)                                              │
 │  ├── Vue 3 Composition API                                      │
-│  ├── Pinia State Management                                     │
-│  ├── Vue Router with Auth Guards                                │
-│  └── 10 Entity Pages (Budget → Allocation)                      │
+│  ├── 11 Base UI Components (BaseButton, BaseModal, etc.)        │
+│  ├── 10 Entity Pages (Budget → Allocation)                      │
+│  ├── useToast for notifications                                 │
+│  └── useApiFetch with auto-authentication                      │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+                               │
+                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Backend (FastAPI)                                              │
 │  ├── 14 Data Models with Audit Tracking                         │
@@ -24,14 +25,81 @@ Ebrose is an enterprise-grade procurement and budget tracking system built with 
 │  ├── Hybrid BusinessCase Access (Creator + Line Items)          │
 │  └── Comprehensive Record-Level Permissions                     │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-      ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-      │   SQLite     │ │   Redis      │ │  CI/CD       │
-      │   (Dev)      │ │  (Session)   │ │  Jenkins     │
-      └──────────────┘ └──────────────┘ └──────────────┘
+                               │
+               ┌───────────────┼───────────────┐
+               ▼               ▼               ▼
+       ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+       │   SQLite     │ │   Redis      │ │  CI/CD       │
+       │   (Dev)      │ │  (Session)   │ │  Jenkins     │
+       └──────────────┘ └──────────────┘ └──────────────┘
 ```
+
+## UI Component Library
+
+The frontend includes a comprehensive base component library for consistent, accessible UI:
+
+### Core Components
+
+| Component | Description |
+|-----------|-------------|
+| **BaseButton** | Primary action button with 5 variants, 4 sizes, loading state, Heroicons |
+| **BaseInput** | Text input with validation, Heroicons, error states |
+| **BaseSelect** | Dropdown with search, multi-select, ARIA accessible, ChevronUpDownIcon |
+| **BaseTextarea** | Auto-resizing textarea with character count |
+| **BaseModal** | Dialog with focus trap, scroll lock, animations, XMarkIcon |
+| **BaseTable** | Data table with sorting, selection, sticky header, ArrowUp/ArrowDown icons |
+| **BaseBadge** | Status indicators with 6 color variants |
+| **BaseCard** | Content container with header/footer slots |
+| **BaseDropdown** | Menu dropdown with keyboard navigation |
+| **LoadingSpinner** | Loading indicator in 5 sizes, ArrowPathIcon |
+| **EmptyState** | Placeholder for empty data lists, InboxIcon |
+
+### Heroicons Integration
+
+All components use [Heroicons](https://heroicons.com/) for consistent iconography:
+
+| Icon | Component | Usage |
+|------|-----------|-------|
+| `ArrowPathIcon` | BaseButton | Loading spinner |
+| `ArrowUpIcon` / `ArrowDownIcon` | BaseTable | Sort indicators |
+| `ChevronUpDownIcon` | BaseSelect | Dropdown arrow |
+| `CheckIcon` | BaseSelect | Selection checkmark |
+| `XMarkIcon` | BaseModal | Close button |
+| `InboxIcon` | EmptyState | Default empty state |
+| Navigation Icons | Layout | Home, Currency, Folder, User, etc. |
+
+### Mobile Responsive Design
+
+- Hamburger menu with Bars3Icon/XMarkIcon
+- Responsive navigation sidebar
+- Touch-friendly interactions
+- Collapsible sections
+
+### Composables
+
+- **useToast()** - Toast notifications (success/error/info)
+- **useApiFetch()** - API wrapper with automatic cookies and 401 refresh
+
+### Design System
+
+All components use CSS variables for consistent styling:
+- Colors: `--color-primary`, `--color-success`, `--color-error`, etc.
+- Spacing: `--spacing-1` through `--spacing-16`
+- Typography: `--text-xs` through `--text-4xl`
+- Transitions: `--transition-fast`, `--transition-base`, `--transition-slow`
+
+Visit `/component-test` to verify all components render correctly.
+
+### Unit Tests
+
+84 Vitest unit tests covering:
+- BaseButton (13 tests)
+- BaseInput (19 tests)
+- BaseSelect (21 tests)
+- EmptyState (8 tests)
+- BaseTable (17 tests)
+
+Run with: `npm run test:unit`
 
 ## Key Features
 

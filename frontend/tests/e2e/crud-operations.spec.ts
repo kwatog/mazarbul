@@ -74,7 +74,7 @@ test.describe('CRUD Operations - True E2E', () => {
     await page.goto('/admin/audit');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
-    await expect(page.locator('h1, .page-header').filter({ hasText: /Audit/i })).toBeVisible();
+    await expect(page.locator('.base-card, h1, .page-header').filter({ hasText: /Audit/i })).toBeVisible();
 
     await page.goto('/admin/groups');
     await page.waitForLoadState('networkidle');

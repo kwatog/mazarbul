@@ -55,6 +55,10 @@ class UserGroupBase(BaseModel):
 class UserGroupCreate(UserGroupBase):
     pass
 
+class UserGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
 class UserGroup(UserGroupBase):
     id: int
     created_by: Optional[int] = None

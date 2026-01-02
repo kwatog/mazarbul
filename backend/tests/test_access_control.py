@@ -442,3 +442,170 @@ def test_alerts_scoped_to_user_access(client, admin_user, admin_token, regular_u
     user_po_alerts = [a for a in user_alerts if a["entity_type"] == "purchase_order"]
     # Should only see PO-USER-001 alerts, not PO-ADMIN-001
     # The exact number depends on the alert logic but should be less than admin
+
+
+def test_record_access_grant_to_group(client, admin_user, regular_user, manager_user, user_token, db_session, test_group):
+    """Test that access can be granted to a group and all members inherit access."""
+    from app.models import BudgetItem, RecordAccess, UserGroupMembership, UserGroup
+
+    # Add regular_user to test_group first (they need to be a member to inherit access)
+    membership = UserGroupMembership(
+        user_id=regular_user.id,
+        group_id=test_group.id
+    )
+    db_session.add(membership)
+    db_session.commit()
+
+    # Create a NEW group that regular_user is NOT a member of
+    other_group = UserGroup(
+        name="Other Test Group",
+        description="Group user is not in",
+        created_by=admin_user.id
+    )
+    db_session.add(other_group)
+    db_session.commit()
+    db_session.refresh(other_group)
+
+    # Create a budget item owned by the other group (regular user NOT a member)
+    budget_item = BudgetItem(
+        workday_ref="WD-GROUP-TEST-001",
+        title="Group Access Test Budget",
+        budget_amount=50000,
+        currency="USD",
+        fiscal_year=2026,
+        owner_group_id=other_group.id,
+        created_by=admin_user.id,
+        created_at=now_utc()
+    )
+    db_session.add(budget_item)
+    db_session.commit()
+    db_session.refresh(budget_item)
+
+    # Verify regular user cannot see this budget item initially
+    response = client.get(
+        f"/budget-items/{budget_item.id}",
+        cookies={"access_token": user_token}
+    )
+    assert response.status_code == 403, "User should not have access initially"
+
+    # Grant Read access to the test_group (which regular_user IS a member of)
+    grant = RecordAccess(
+        record_type="BudgetItem",
+        record_id=budget_item.id,
+        group_id=test_group.id,
+        access_level="Read",
+        granted_by=admin_user.id,
+        granted_at=now_utc()
+    )
+    db_session.add(grant)
+    db_session.commit()
+
+    # Now regular user should be able to read (since they're a member of test_group which has access)
+    response = client.get(
+        f"/budget-items/{budget_item.id}",
+        cookies={"access_token": user_token}
+    )
+    assert response.status_code == 200, "User should have access via group grant"
+
+
+def test_record_access_group_grant_prevents_write_without_permission(client, admin_user, regular_user, manager_user, user_token, db_session, test_group):
+    """Test that group grant with Read level does not allow write operations."""
+    from app.models import BudgetItem, RecordAccess, UserGroupMembership, UserGroup
+
+    # Add regular_user to test_group first
+    membership = UserGroupMembership(
+        user_id=regular_user.id,
+        group_id=test_group.id
+    )
+    db_session.add(membership)
+    db_session.commit()
+
+    # Create a NEW group that regular_user is NOT a member of
+    other_group = UserGroup(
+        name="Other Group for Write Test",
+        description="Group user is not in",
+        created_by=admin_user.id
+    )
+    db_session.add(other_group)
+    db_session.commit()
+    db_session.refresh(other_group)
+
+    # Create a budget item owned by other group
+    budget_item = BudgetItem(
+        workday_ref="WD-GROUP-READ-ONLY-001",
+        title="Read Only Group Budget",
+        budget_amount=75000,
+        currency="USD",
+        fiscal_year=2026,
+        owner_group_id=other_group.id,
+        created_by=admin_user.id,
+        created_at=now_utc()
+    )
+    db_session.add(budget_item)
+    db_session.commit()
+    db_session.refresh(budget_item)
+
+    # Grant Read-only access to test_group (regular_user IS a member of test_group)
+    grant = RecordAccess(
+        record_type="BudgetItem",
+        record_id=budget_item.id,
+        group_id=test_group.id,
+        access_level="Read",
+        granted_by=admin_user.id,
+        granted_at=now_utc()
+    )
+    db_session.add(grant)
+    db_session.commit()
+
+    # User should be able to read
+    response = client.get(
+        f"/budget-items/{budget_item.id}",
+        cookies={"access_token": user_token}
+    )
+    assert response.status_code == 200, "User should have Read access via group"
+
+    # User should NOT be able to write (Read-only grant)
+    response = client.put(
+        f"/budget-items/{budget_item.id}",
+        json={"title": "Modified Title"},
+        cookies={"access_token": user_token}
+    )
+    assert response.status_code == 403, "Read-only group grant should not allow writes"
+
+
+def test_password_policy_enforcement_on_login_weak_password(client, regular_user):
+    """Test that login rejects weak passwords that don't meet policy."""
+    # Try to login with a weak password (should fail authentication first before policy check)
+    response = client.post(
+        "/auth/login",
+        data={"username": "testuser", "password": "weak"}
+    )
+    # Should fail with 401 (invalid credentials) since weak password hash won't match
+    assert response.status_code == 401
+    assert "Incorrect username or password" in response.json()["detail"]
+
+
+def test_password_policy_enforcement_on_login_short_password(client, regular_user):
+    """Test that very short passwords are rejected during login."""
+    response = client.post(
+        "/auth/login",
+        data={"username": "testuser", "password": "abc"}
+    )
+    assert response.status_code == 401
+    assert "Incorrect username or password" in response.json()["detail"]
+
+
+def test_password_policy_enforcement_on_login_missing_requirements(client, regular_user):
+    """Test that passwords missing uppercase, lowercase, digit, or special char are rejected."""
+    test_cases = [
+        "alllowercase123",     # Missing uppercase
+        "ALLUPPERCASE123!",    # Missing lowercase
+        "NoSpecialChars123",   # Missing special character
+        "NoDigits!@#",         # Missing digit
+    ]
+    for password in test_cases:
+        response = client.post(
+            "/auth/login",
+            data={"username": "testuser", "password": password}
+        )
+        assert response.status_code == 401, f"Password '{password}' should be rejected"

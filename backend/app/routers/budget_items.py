@@ -129,7 +129,7 @@ def update_budget_item(
     id: int,
     budget_item_update: schemas.BudgetItemUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(check_record_access("BudgetItem", "id", "Write"))
 ):
     """Update an existing budget item."""
     db_budget_item = db.get(models.BudgetItem, id)

@@ -89,11 +89,11 @@ def get_alerts(
             })
 
         if po.status == "Open":
-            has_gr_this_month = any(gr.gr_date and gr.gr_date.startswith(current_month) for gr in po.goods_receipts)
+            has_gr_this_month = any(gr.gr_date and gr.gr_date.month == current_month and gr.gr_date.year == current_year for gr in po.goods_receipts)
             if not has_gr_this_month:
                 alerts.append({
                     "type": "no_gr_this_month",
-                    "message": f"PO {po.po_number} has no Goods Receipt for this month ({current_month})",
+                    "message": f"PO {po.po_number} has no Goods Receipt for this month ({current_year}-{current_month:02d})",
                     "severity": "info",
                     "entity_id": po.id,
                     "entity_type": "purchase_order"
@@ -133,14 +133,14 @@ def get_alerts(
         has_active_allocation = False
         for alloc in res.allocations:
             if alloc.allocation_start and alloc.allocation_end:
-                if alloc.allocation_start <= today_str <= alloc.allocation_end:
+                if alloc.allocation_start.date() <= today <= alloc.allocation_end.date():
                     has_active_allocation = True
                     break
-        
+
         if not has_active_allocation:
             alerts.append({
                 "type": "resource_without_po",
-                "message": f"Resource {res.name} is Active but has no PO allocation for today ({today_str})",
+                "message": f"Resource {res.name} is Active but has no PO allocation for today ({today})",
                 "severity": "warning",
                 "entity_id": res.id,
                 "entity_type": "resource"

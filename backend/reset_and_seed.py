@@ -13,6 +13,7 @@ Usage:
 
 import os
 import sys
+from datetime import datetime, timezone
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -183,7 +184,7 @@ def seed_data():
             spend_category="OPEX",
             requested_amount=150000.00,
             currency="USD",
-            planned_commit_date="2025-02-01",
+            planned_commit_date=datetime(2025, 2, 1, tzinfo=timezone.utc),
             status="Approved",
             created_by=admin_user.id,
             created_at=now
@@ -228,13 +229,13 @@ def seed_data():
             ariba_pr_number="PR-2025-AWS-001",
             supplier="Amazon Web Services",
             po_type="Service",
-            start_date="2025-02-01",
-            end_date="2026-01-31",
+            start_date=datetime(2025, 2, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 1, 31, tzinfo=timezone.utc),
             total_amount=120000.00,
             currency="USD",
             spend_category="OPEX",
-            planned_commit_date="2025-01-15",
-            actual_commit_date="2025-01-20",
+            planned_commit_date=datetime(2025, 1, 15, tzinfo=timezone.utc),
+            actual_commit_date=datetime(2025, 1, 20, tzinfo=timezone.utc),
             owner_group_id=asset.owner_group_id,  # Inherited
             status="Open",
             created_by=admin_user.id,
@@ -248,7 +249,7 @@ def seed_data():
         gr = models.GoodsReceipt(
             po_id=po.id,
             gr_number="GR-2025-001",
-            gr_date="2025-02-15",
+            gr_date=datetime(2025, 2, 15, tzinfo=timezone.utc),
             amount=10000.00,
             description="First month AWS services",
             owner_group_id=po.owner_group_id,  # Inherited
@@ -264,8 +265,8 @@ def seed_data():
             name="John Smith",
             vendor="TechCorp Consulting",
             role="Cloud Architect",
-            start_date="2025-02-01",
-            end_date="2025-12-31",
+            start_date=datetime(2025, 2, 1, tzinfo=timezone.utc),
+            end_date=datetime(2025, 12, 31, tzinfo=timezone.utc),
             cost_per_month=15000.00,
             owner_group_id=it_group.id,
             status="Active",
@@ -280,8 +281,8 @@ def seed_data():
         allocation = models.ResourcePOAllocation(
             resource_id=resource.id,
             po_id=po.id,
-            allocation_start="2025-02-01",
-            allocation_end="2025-12-31",
+            allocation_start=datetime(2025, 2, 1, tzinfo=timezone.utc),
+            allocation_end=datetime(2025, 12, 31, tzinfo=timezone.utc),
             expected_monthly_burn=15000.00,
             owner_group_id=po.owner_group_id,  # Inherited
             created_by=admin_user.id,
